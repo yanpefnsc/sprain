@@ -1,161 +1,248 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SPRAIN - Monitoramento de Intransitabilidade Viária</title>
-    <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
-    <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
-    <style>
-        body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0b0f19; }
-        #map { position: absolute; top: 0; bottom: 0; width: 100%; }
-        
-        .panel {
-            position: absolute; top: 16px; left: 16px; z-index: 10;
-            background: rgba(15, 23, 42, 0.94); color: #f8fafc;
-            padding: 18px; border-radius: 10px; max-width: 320px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.5); backdrop-filter: blur(8px);
-            border: 1px solid rgba(255,255,255,0.1);
-        }
-        .panel h1 { font-size: 1.1rem; margin: 0 0 4px 0; font-weight: 700; color: #38bdf8; }
-        .panel p { font-size: 0.8rem; margin: 0 0 14px 0; color: #94a3b8; }
-        
-        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
-        .stat-card { background: rgba(255,255,255,0.05); padding: 8px; border-radius: 6px; }
-        .stat-card .val { font-size: 1.1rem; font-weight: 700; }
-        .stat-card .lbl { font-size: 0.7rem; color: #94a3b8; text-transform: uppercase; }
-
-        .legend { font-size: 0.8rem; display: flex; flex-direction: column; gap: 6px; }
-        .legend-item { display: flex; align-items: center; gap: 8px; }
-        .dot { width: 12px; height: 12px; border-radius: 3px; }
-        .dot-intransitavel { background: #d946ef; box-shadow: 0 0 8px #d946ef; }
-        .dot-critico { background: #ef4444; }
-        .dot-alto { background: #f97316; }
-        .dot-medio { background: #eab308; }
-        .dot-baixo { background: #22c55e; }
-
-        .maplibregl-popup-content {
-            background: #1e293b; color: #f8fafc; border-radius: 8px;
-            padding: 12px 14px; font-size: 0.85rem; box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-        }
-        .maplibregl-popup-anchor-top .maplibregl-popup-tip { border-bottom-color: #1e293b; }
-        .maplibregl-popup-anchor-bottom .maplibregl-popup-tip { border-top-color: #1e293b; }
-    </style>
+  <meta charset="UTF-8">
+  <title>SPRAIN - Sala de Situação Integrada</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+  <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+    body { display: flex; flex-direction: column; height: 100vh; width: 100vw; overflow: hidden; background: #0b0f19; color: #f1f5f9; }
+    
+    header { height: 56px; background: #111827; border-bottom: 1px solid #1f2937; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; z-index: 10; }
+    .brand { font-weight: 800; font-size: 1.15rem; color: #38bdf8; display: flex; align-items: center; gap: 8px; }
+    .toolbar { display: flex; align-items: center; gap: 16px; }
+    .tool-group { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; color: #94a3b8; }
+    
+    .btn { background: #1e293b; color: #f8fafc; border: 1px solid #334155; padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+    .btn:hover { background: #334155; }
+    .btn-simular { background: #0284c7; border-color: #0369a1; }
+    .btn-simular:hover { background: #0369a1; }
+    .btn-reset { background: #dc2626; border-color: #b91c1c; }
+    .btn-reset:hover { background: #b91c1c; }
+    
+    .main-container { display: flex; flex: 1; height: calc(100vh - 56px); position: relative; }
+    #map { flex: 1; height: 100%; }
+    
+    #sidebar { width: 360px; height: 100%; background: #0f172a; border-left: 1px solid #1e293b; display: flex; flex-direction: column; z-index: 5; }
+    .panel-section { padding: 14px; border-bottom: 1px solid #1e293b; }
+    .section-title { font-size: 0.85rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; margin-bottom: 10px; display: flex; justify-content: space-between; }
+    
+    .input-text { width: 100%; background: #1e293b; border: 1px solid #334155; border-radius: 6px; padding: 8px; color: #fff; font-size: 0.8rem; resize: none; margin-bottom: 8px; }
+    .input-text:focus { outline: none; border-color: #38bdf8; }
+    
+    .legenda-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 0.72rem; }
+    .legenda-item { display: flex; align-items: center; gap: 6px; }
+    .cor-box { width: 10px; height: 10px; border-radius: 2px; }
+    
+    #feed-alertas { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+    .card-alerta { background: #1e293b; border-radius: 6px; padding: 10px; border-left: 4px solid #38bdf8; cursor: pointer; transition: background 0.15s; }
+    .card-alerta:hover { background: #283548; }
+    .card-alerta .via { font-weight: 700; font-size: 0.85rem; color: #f8fafc; }
+    .card-alerta .info { font-size: 0.75rem; color: #cbd5e1; margin-top: 4px; line-height: 1.3; }
+    .card-alerta .meta { font-size: 0.7rem; color: #94a3b8; margin-top: 6px; display: flex; justify-content: space-between; align-items: center; }
+    
+    .maplibregl-popup-content { background: #0f172a; color: #f8fafc; border-radius: 8px; padding: 12px; border: 1px solid #334155; }
+    .maplibregl-popup-anchor-bottom .maplibregl-popup-tip { border-top-color: #0f172a; }
+  </style>
 </head>
 <body>
-
-<div class="panel">
-    <h1>SPRAIN • Itaquera</h1>
-    <p>Monitoramento Operacional de Intransitabilidade</p>
-    
-    <div class="stats-grid">
-        <div class="stat-card">
-            <div class="val" id="stat-total">--</div>
-            <div class="lbl">Trechos</div>
-        </div>
-        <div class="stat-card">
-            <div class="val" id="stat-criticos" style="color: #ef4444;">--</div>
-            <div class="lbl">Críticos</div>
-        </div>
+  <header>
+    <div class="brand">SPRAIN <span>• Sala de Situação (Itaquera)</span></div>
+    <div class="toolbar">
+      <div class="tool-group">
+        <label for="slider-chuva">Cenário de Chuva:</label>
+        <input type="range" id="slider-chuva" min="20" max="110" step="5" value="50" oninput="document.getElementById('lbl-chuva').innerText = this.value + ' mm'">
+        <span id="lbl-chuva" style="font-weight:700; color:#38bdf8; min-width: 45px;">50 mm</span>
+        <button class="btn btn-simular" onclick="executarSimulacao()">Simular Impacto</button>
+      </div>
+      <button class="btn btn-reset" onclick="resetarVias()">Normalizar Malha</button>
     </div>
+  </header>
 
-    <div class="legend">
-        <div class="legend-item"><span class="dot dot-intransitavel"></span> <b>INTRANSITÁVEL (Ativo)</b></div>
-        <div class="legend-item"><span class="dot dot-critico"></span> Crítico (IVI &ge; 70)</div>
-        <div class="legend-item"><span class="dot dot-alto"></span> Alto (50 &le; IVI &lt; 70)</div>
-        <div class="legend-item"><span class="dot dot-medio"></span> Médio (30 &le; IVI &lt; 50)</div>
-        <div class="legend-item"><span class="dot dot-baixo"></span> Baixo (IVI &lt; 30)</div>
+  <div class="main-container">
+    <div id="map"></div>
+    <div id="sidebar">
+      <div class="panel-section">
+        <div class="section-title">Despacho Textual (NLP)</div>
+        <textarea id="txt-ocorrencia" class="input-text" rows="2" placeholder="Ex: Ponto critico de alagamento na Rua Sabbado D'Angelo"></textarea>
+        <button class="btn" style="width:100%;" onclick="enviarRelatoTexto()">Processar e Interditar</button>
+      </div>
+
+      <div class="panel-section">
+        <div class="section-title">Legenda de Vulnerabilidade (IVI)</div>
+        <div class="legenda-grid">
+          <div class="legenda-item"><span class="cor-box" style="background:#22c55e;"></span>Baixo (<40)</div>
+          <div class="legenda-item"><span class="cor-box" style="background:#eab308;"></span>Médio (40-60)</div>
+          <div class="legenda-item"><span class="cor-box" style="background:#f97316;"></span>Alto (60-70)</div>
+          <div class="legenda-item"><span class="cor-box" style="background:#ef4444;"></span>Crítico (≥70)</div>
+          <div class="legenda-item" style="grid-column: span 2;"><span class="cor-box" style="background:#d946ef; height:4px; width:16px;"></span>Vias Bloqueadas (Intransitáveis)</div>
+          <div class="legenda-item" style="grid-column: span 2;"><span class="cor-box" style="background:#38bdf8; height:4px; width:16px;"></span>Rota Tática Segura</div>
+        </div>
+      </div>
+
+      <div class="panel-section" style="padding-bottom: 4px;">
+        <div class="section-title">
+          <span>Ocorrências Ativas</span>
+          <span id="contador-alertas" style="color:#38bdf8;">0</span>
+        </div>
+      </div>
+
+      <div id="feed-alertas">
+        <div style="color: #64748b; font-size: 0.8rem;">A sincronizar malha viária...</div>
+      </div>
     </div>
-</div>
+  </div>
 
-<div id="map"></div>
-
-<script>
+  <script>
     const map = new maplibregl.Map({
-        container: 'map',
-        style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
-        center: [-46.456, -23.535],
-        zoom: 13.5
+      container: 'map',
+      style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
+      center: [-46.471, -23.542],
+      zoom: 13
     });
 
-    map.addControl(new maplibregl.NavigationControl(), 'top-right');
+    let dadosTrechosGeoJSON = null;
 
-    map.on('load', async () => {
-        try {
-            const resStats = await fetch('/api/v1/estatisticas/distrito');
-            const dataStats = await resStats.json();
-            document.getElementById('stat-total').innerText = dataStats.total_trechos.toLocaleString();
-            document.getElementById('stat-criticos').innerText = dataStats.criticos.toLocaleString();
-        } catch (e) {
-            console.error('Erro estatisticas:', e);
+    function corPorSeveridade(sev) {
+      if (sev === 'VERMELHO') return '#ef4444';
+      if (sev === 'LARANJA') return '#f97316';
+      if (sev === 'AMARELO') return '#eab308';
+      return '#22c55e';
+    }
+
+    async function sincronizar() {
+      try {
+        const resGeo = await fetch('/api/v1/trechos/geojson');
+        dadosTrechosGeoJSON = await resGeo.json();
+        if (map.getSource('vias-source')) {
+          map.getSource('vias-source').setData(dadosTrechosGeoJSON);
         }
 
-        // Camada de vias
-        map.addSource('vias-sprain', {
-            type: 'geojson',
-            data: '/api/v1/trechos/geojson?limit=5000'
-        });
+        const resAtivas = await fetch('/api/v1/ocorrencias/ativas');
+        const alertas = await resAtivas.json();
+        const feed = document.getElementById('feed-alertas');
+        document.getElementById('contador-alertas').innerText = alertas ? alertas.length : 0;
 
-        // 1. Linhas base coloridas pelo IVI
-        map.addLayer({
+        if (!alertas || alertas.length === 0) {
+          feed.innerHTML = '<div style="color: #64748b; font-size: 0.8rem;">Todas as vias transitáveis.</div>';
+          return;
+        }
+
+        feed.innerHTML = alertas.map(a => `
+          <div class="card-alerta" style="border-left-color: ${corPorSeveridade(a.severidade)}" onclick="focarNoTrecho(${a.id_trecho})">
+            <div class="via">${a.nome_via || 'Trecho sem denominação'}</div>
+            <div class="info">${a.relato_origem || ''}</div>
+            <div class="meta">
+              <span>Status: ${a.status}</span>
+              <span>${a.registrado_em}</span>
+            </div>
+          </div>
+        `).join('');
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    function focarNoTrecho(idTrecho) {
+      if (!dadosTrechosGeoJSON) return;
+      const feat = dadosTrechosGeoJSON.features.find(f => f.properties.id_trecho === idTrecho);
+      if (feat && feat.geometry) {
+        const coords = feat.geometry.coordinates;
+        const pt = feat.geometry.type === 'LineString' ? coords[Math.floor(coords.length / 2)] : coords[0][0];
+        map.flyTo({ center: pt, zoom: 15, speed: 1.2 });
+      }
+    }
+
+    async function executarSimulacao() {
+      const mm = parseFloat(document.getElementById('slider-chuva').value);
+      await fetch('/api/v1/simulacao/disparar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ milimetros_chuva: mm })
+      });
+      sincronizar();
+    }
+
+    async function resetarVias() {
+      await fetch('/api/v1/ocorrencias/resetar-todas', { method: 'POST' });
+      sincronizar();
+    }
+
+    async function enviarRelatoTexto() {
+      const campo = document.getElementById('txt-ocorrencia');
+      const texto = campo.value.trim();
+      if (!texto) return;
+      await fetch('/api/v1/ocorrencias/processar-texto', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ texto })
+      });
+      campo.value = '';
+      sincronizar();
+    }
+
+    map.on('load', () => {
+      fetch('/api/v1/trechos/geojson')
+        .then(r => r.json())
+        .then(data => {
+          dadosTrechosGeoJSON = data;
+          map.addSource('vias-source', { type: 'geojson', data: data });
+
+          map.addLayer({
             id: 'vias-base',
             type: 'line',
-            source: 'vias-sprain',
-            layout: { 'line-join': 'round', 'line-cap': 'round' },
+            source: 'vias-source',
             paint: {
-                'line-width': 2.5,
-                'line-color': [
-                    'step',
-                    ['coalesce', ['get', 'ivi'], 0],
-                    '#22c55e', // < 30
-                    30, '#eab308', // 30 - 50
-                    50, '#f97316', // 50 - 70
-                    70, '#ef4444'  // >= 70
-                ],
-                'line-opacity': 0.85
+              'line-color': [
+                'step',
+                ['coalesce', ['get', 'ivi'], 0],
+                '#22c55e',
+                40, '#eab308',
+                60, '#f97316',
+                70, '#ef4444'
+              ],
+              'line-width': ['interpolate', ['linear'], ['zoom'], 11, 1.2, 14, 2.5, 16, 4.0],
+              'line-opacity': 0.85
             }
-        });
+          });
 
-        // 2. Camada de destaque em cima para quem esta INTRANSITAVEL
-        map.addLayer({
+          map.addLayer({
             id: 'vias-bloqueadas',
             type: 'line',
-            source: 'vias-sprain',
-            filter: ['==', ['get', 'status_operacional'], 'INTRANSITAVEL'],
-            layout: { 'line-join': 'round', 'line-cap': 'round' },
+            source: 'vias-source',
+            filter: ['!=', ['get', 'status_operacional'], 'TRANSITAVEL'],
             paint: {
-                'line-width': 6.0,
-                'line-color': '#d946ef',
-                'line-opacity': 1.0
+              'line-color': '#d946ef',
+              'line-width': ['interpolate', ['linear'], ['zoom'], 11, 3.5, 14, 6.0, 16, 9.0],
+              'line-opacity': 0.95
             }
-        });
+          });
 
-        map.on('click', 'vias-base', (e) => {
+          map.on('click', 'vias-base', (e) => {
             const p = e.features[0].properties;
-            const nome = p.nome || 'Logradouro sem nome';
-            const statusOp = p.status_operacional || 'TRANSITAVEL';
-            const statusHtml = statusOp === 'INTRANSITAVEL' 
-                ? '<div style="color: #d946ef; font-weight: 700; margin: 4px 0;">⛔ BLOQUEADO: INTRANSITÁVEL</div>' 
-                : `<div style="color: #22c55e; margin: 4px 0;">Liberado (${statusOp})</div>`;
-
             new maplibregl.Popup()
-                .setLngLat(e.lngLat)
-                .setHTML(`
-                    <strong style="font-size: 0.95rem; color: #38bdf8;">${nome}</strong>
-                    ${statusHtml}
-                    <div style="margin-top: 6px; line-height: 1.5;">
-                        <b>Score IVI:</b> ${p.ivi} (${p.classe_risco})<br/>
-                        <b>Cota Média:</b> ${p.altitude_media} m<br/>
-                        <b>Distância da Água:</b> ${p.distancia_agua_m} m<br/>
-                        ${p.relato_origem ? `<b>Origem do Alerta:</b> <i>"${p.relato_origem}"</i>` : ''}
-                    </div>
-                `)
-                .addTo(map);
-        });
+              .setLngLat(e.lngLat)
+              .setHTML(`
+                <div style="font-weight:700; margin-bottom:4px;">${p.nome || 'Via sem nome'}</div>
+                <div style="font-size:0.8rem;">IVI: <strong>${p.ivi !== undefined ? Number(p.ivi).toFixed(1) : 'N/D'}</strong></div>
+                <div style="font-size:0.8rem;">Cota média: ${p.altitude_media ? Number(p.altitude_media).toFixed(1) + ' m' : 'N/D'}</div>
+                <div style="font-size:0.8rem;">Distância rio: ${p.distancia_agua ? Number(p.distancia_agua).toFixed(0) + ' m' : 'N/D'}</div>
+                <div style="font-size:0.8rem; margin-top:4px; color:${p.status_operacional === 'INTRANSITAVEL' ? '#f43f5e' : '#4ade80'};">
+                  Status: <strong>${p.status_operacional || 'TRANSITAVEL'}</strong>
+                </div>
+              `)
+              .addTo(map);
+          });
 
-        map.on('mouseenter', 'vias-base', () => { map.getCanvas().style.cursor = 'pointer'; });
-        map.on('mouseleave', 'vias-base', () => { map.getCanvas().style.cursor = ''; });
+          map.on('mouseenter', 'vias-base', () => { map.getCanvas().style.cursor = 'pointer'; });
+          map.on('mouseleave', 'vias-base', () => { map.getCanvas().style.cursor = ''; });
+
+          sincronizar();
+          setInterval(sincronizar, 8000);
+        });
     });
-</script>
+  </script>
 </body>
 </html>

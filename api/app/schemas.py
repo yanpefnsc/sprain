@@ -1,36 +1,19 @@
-from typing import Any, Dict, List, Literal, Optional
-from pydantic import BaseModel, Field
+﻿from pydantic import BaseModel, Field
+from typing import Optional, Dict
 
-ClasseRisco = Literal["critico", "alto", "medio", "baixo"]
+class AlertaRapidoCreate(BaseModel):
+    latitude: float = Field(..., ge=-90, le=90)
+    longitude: float = Field(..., ge=-180, le=180)
+    nivel: str = Field(..., pattern="^(VERDE|AMARELO|LARANJA|VERMELHO)$")
+    corporacao: str = Field(default="DEFESA_CIVIL")
+    observacao: Optional[str] = None
 
-class GeoJSONGeometry(BaseModel):
-    type: str
-    coordinates: Any
-
-class GeoJSONFeature(BaseModel):
-    type: str = "Feature"
-    geometry: GeoJSONGeometry
-    properties: Dict[str, Any]
-
-class GeoJSONFeatureCollection(BaseModel):
-    type: str = "FeatureCollection"
-    features: List[GeoJSONFeature]
-
-class TrechoDetalhe(BaseModel):
-    id_trecho: int
-    nome: Optional[str] = None
-    ivi: float = Field(..., ge=0, le=100)
-    classe_risco: Optional[str] = None
-    altitude_media: Optional[float] = None
-    classe_declividade: Optional[float] = None
-    distancia_agua_m: Optional[float] = None
-    total_alagamentos: Optional[int] = 0
-    id_setor_ibge: Optional[str] = None
+class OcorrenciaTextoCreate(BaseModel):
+    texto: str
+    fonte: str = "OPERACIONAL"
 
 class ResumoEstatisticas(BaseModel):
     total_trechos: int
-    criticos: int
-    altos: int
-    medios: int
-    baixos: int
-    ivi_medio: float
+    trechos_criticos: int
+    trechos_interditados: int
+    distribuicao_severidade: Dict[str, int]

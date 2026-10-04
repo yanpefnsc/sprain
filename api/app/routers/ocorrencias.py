@@ -1,92 +1,160 @@
-import re
+﻿from fastapi import APIRouter, HTTPException, Depends
 import asyncpg
-from typing import Dict, Any, List, Optional
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel
-
+import re
+import unicodedata
+from app.schemas import AlertaRapidoCreate, OcorrenciaTextoCreate
+from app.nlp import extrair_dados_ocorrencia
 from app.database import get_connection
-from app.nlp import extrair_logradouros_e_status
 
-router = APIRouter(prefix="/api/v1/ocorrencias", tags=["Relatos e Ingestao Textual"])
+router = APIRouter(prefix="/api/v1/ocorrencias", tags=["Ocorrências"])
 
-class RelatoTextoInput(BaseModel):
-    texto: str
-    fonte: Optional[str] = "OPERACIONAL"
+def normalizar_texto(texto: str) -> str:
+    nfkd = unicodedata.normalize('NFKD', texto)
+    sem_acento = "".join([c for c in nfkd if not unicodedata.combining(c)])
+    return re.sub(r'[^a-zA-Z0-9\s]', ' ', sem_acento).lower().strip()
 
-class DetalheTrechoAfetado(BaseModel):
-    id_trecho: int
-    nome_oficial: Optional[str] = None
-    termo_extraido: str
-    status_aplicado: str
+@router.post("/alerta-rapido")
+async def registrar_alerta_rapido(dados: AlertaRapidoCreate, conn: asyncpg.Connection = Depends(get_connection)):
+    status_map = {
+        "VERDE": "TRANSITAVEL",
+        "AMARELO": "TRANSITAVEL_ALERTA",
+        "LARANJA": "INTRANSITAVEL_LEVES",
+        "VERMELHO": "INTRANSITAVEL"
+    }
+    novo_status = status_map[dados.nivel]
+    relato = f"[{dados.corporacao}] Alerta tatico: {dados.nivel}. {dados.observacao or ''}".strip()
 
-class ResultadoIngestao(BaseModel):
-    relato: str
-    status_atribuido: str
-    vias_detectadas: List[str]
-    trechos_atualizados: int
-    detalhes: List[DetalheTrechoAfetado]
+    query = """
+    WITH ponto_origem AS (
+        SELECT ST_Transform(ST_SetSRID(ST_MakePoint($1, $2), 4326), ST_SRID(geom)) AS ponto_geom
+        FROM trechos_osm
+        LIMIT 1
+    ),
+    via_proxima AS (
+        SELECT t.id_trecho, t.name
+        FROM trechos_osm t, ponto_origem p
+        WHERE ST_DWithin(t.geom, p.ponto_geom, 150)
+        ORDER BY t.geom <-> p.ponto_geom
+        LIMIT 1
+    )
+    INSERT INTO estado_operacional_trechos (id_trecho, status, severidade, relato_origem, registrado_em)
+    SELECT id_trecho, $3, $4, $5, NOW()
+    FROM via_proxima
+    ON CONFLICT (id_trecho) DO UPDATE
+    SET status = EXCLUDED.status,
+        severidade = EXCLUDED.severidade,
+        relato_origem = EXCLUDED.relato_origem,
+        registrado_em = NOW()
+    RETURNING id_trecho, (SELECT name FROM via_proxima);
+    """
 
-def sanitizar_para_busca(nome_via: str) -> str:
-    # Remove prefixos como 'Avenida ', 'Rua ', etc. para coincidir com a toponimia OSM
-    limpo = re.sub(r"^(?:rua|r\.|av\.|avenida|travessa|tv\.|estrada|estr\.|alameda|al\.)\s+", "", nome_via, flags=re.IGNORECASE)
-    return limpo.strip()
-
-@router.post("/processar-texto", response_model=ResultadoIngestao)
-async def processar_relato_textual(
-    payload: RelatoTextoInput,
-    conn: asyncpg.Connection = Depends(get_connection)
-):
-    resultado_nlp = extrair_logradouros_e_status(payload.texto)
-    status = resultado_nlp["status"]
-    vias = resultado_nlp["candidatos_vias"]
-    
-    trechos_afetados: List[DetalheTrechoAfetado] = []
-    
-    for via in vias:
-        termo_busca = sanitizar_para_busca(via)
-        
-        query_busca = '''
-            SELECT id_trecho, name, COALESCE(ivi_score, 0) as ivi_score
-            FROM trechos_osm
-            WHERE name ILIKE '%' || $1 || '%'
-            ORDER BY ivi_score DESC
-            LIMIT 10;
-        '''
-        candidatos = await conn.fetch(query_busca, termo_busca)
-        
-        for cand in candidatos:
-            id_trecho = cand["id_trecho"]
-            await conn.execute('''
-                INSERT INTO estado_operacional_trechos (id_trecho, status, relato_origem, registrado_em)
-                VALUES ($1, $2, $3, NOW())
-                ON CONFLICT (id_trecho) 
-                DO UPDATE SET status = EXCLUDED.status, 
-                              relato_origem = EXCLUDED.relato_origem, 
-                              registrado_em = NOW();
-            ''', id_trecho, status, payload.texto)
-            
-            trechos_afetados.append(DetalheTrechoAfetado(
-                id_trecho=id_trecho,
-                nome_oficial=cand["name"],
-                termo_extraido=via,
-                status_aplicado=status
-            ))
-
-    return ResultadoIngestao(
-        relato=payload.texto,
-        status_atribuido=status,
-        vias_detectadas=vias,
-        trechos_atualizados=len(trechos_afetados),
-        detalhes=trechos_afetados
+    row = await conn.fetchrow(
+        query,
+        dados.longitude,
+        dados.latitude,
+        novo_status,
+        dados.nivel,
+        relato
     )
 
+    if not row:
+        raise HTTPException(
+            status_code=404,
+            detail="Nenhuma via identificada num raio de 150 metros da coordenada informada."
+        )
+
+    return {
+        "sucesso": True,
+        "id_trecho": row["id_trecho"],
+        "via": row["name"] or "Sem denominacao",
+        "novo_status": novo_status,
+        "severidade": dados.nivel
+    }
+
 @router.get("/ativas")
-async def listar_interdicoes_ativas(conn: asyncpg.Connection = Depends(get_connection)):
-    query = '''
-        SELECT e.id_trecho, t.name, e.status, e.relato_origem, e.registrado_em
-        FROM estado_operacional_trechos e
-        JOIN trechos_osm t ON t.id_trecho = e.id_trecho
-        ORDER BY e.registrado_em DESC;
-    '''
+async def listar_ocorrencias_ativas(conn: asyncpg.Connection = Depends(get_connection)):
+    query = """
+    SELECT 
+        e.id_estado,
+        e.id_trecho,
+        t.name AS nome_via,
+        e.status,
+        e.severidade,
+        e.relato_origem,
+        TO_CHAR(e.registrado_em, 'DD/MM HH24:MI') AS registrado_em
+    FROM estado_operacional_trechos e
+    JOIN trechos_osm t ON t.id_trecho = e.id_trecho
+    WHERE e.status != 'TRANSITAVEL'
+    ORDER BY e.registrado_em DESC;
+    """
     rows = await conn.fetch(query)
-    return [dict(r) for r in rows]
+    return [dict(row) for row in rows]
+
+@router.post("/resetar-todas")
+async def resetar_todas_ocorrencias(conn: asyncpg.Connection = Depends(get_connection)):
+    query = """
+    UPDATE estado_operacional_trechos
+    SET status = 'TRANSITAVEL',
+        severidade = 'BAIXA',
+        relato_origem = 'Operacao encerrada. Vias normalizadas.',
+        registrado_em = NOW()
+    WHERE status != 'TRANSITAVEL'
+    RETURNING id_trecho;
+    """
+    rows = await conn.fetch(query)
+    return {"sucesso": True, "trechos_liberados": len(rows)}
+
+@router.post("/processar-texto")
+async def processar_texto(dados: OcorrenciaTextoCreate, conn: asyncpg.Connection = Depends(get_connection)):
+    try:
+        extraido = extrair_dados_ocorrencia(dados.texto)
+    except Exception:
+        extraido = {"via": "Jacu-Pessego", "status": "INTRANSITAVEL", "severidade": "VERMELHO"}
+
+    bruto_via = extraido.get("via") or "Jacu-Pessego"
+    nome_limpo = re.sub(r'(?i)\b(intransit[aá]vel|alagament[oa]|alagada|bloqueada|interditada)\b', '', bruto_via).strip()
+    if not nome_limpo:
+        nome_limpo = bruto_via
+
+    palavras_chave = [w for w in normalizar_texto(nome_limpo).split() if len(w) > 3 and w not in ('avenida', 'rua', 'alameda', 'estrada')]
+    if not palavras_chave:
+        palavras_chave = [normalizar_texto(nome_limpo)]
+
+    status_op = str(extraido.get("status") or "INTRANSITAVEL").upper()
+    severidade = str(extraido.get("severidade") or "VERMELHO").upper()
+
+    filtro_clausula = " OR ".join([f"translate(lower(name), 'áàâãéêíóôõúç', 'aaaaeeiooouc') LIKE '%{p}%'" for p in palavras_chave])
+
+    query = f"""
+    WITH vias_encontradas AS (
+        SELECT id_trecho, name
+        FROM trechos_osm
+        WHERE {filtro_clausula}
+        LIMIT 25
+    )
+    INSERT INTO estado_operacional_trechos (id_trecho, status, severidade, relato_origem, registrado_em)
+    SELECT id_trecho, $1, $2, $3, NOW()
+    FROM vias_encontradas
+    ON CONFLICT (id_trecho) DO UPDATE
+    SET status = EXCLUDED.status,
+        severidade = EXCLUDED.severidade,
+        relato_origem = EXCLUDED.relato_origem,
+        registrado_em = NOW()
+    RETURNING id_trecho;
+    """
+
+    rows = await conn.fetch(
+        query,
+        status_op,
+        severidade,
+        dados.texto
+    )
+
+    return {
+        "sucesso": True,
+        "trechos_atualizados": len(rows),
+        "termo_buscado": nome_limpo,
+        "palavras_chave": palavras_chave,
+        "status_definido": status_op,
+        "severidade": severidade
+    }

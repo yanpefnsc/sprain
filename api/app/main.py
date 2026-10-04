@@ -1,14 +1,9 @@
-from contextlib import asynccontextmanager
-from pathlib import Path
-from fastapi import FastAPI
+﻿from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
-
-from app.database import close_db_pool, init_db_pool
-from app.routers import estatisticas, trechos, ocorrencias
-
-BASE_DIR = Path(__file__).resolve().parent.parent
-INDEX_HTML = BASE_DIR / "static" / "index.html"
+from contextlib import asynccontextmanager
+from app.database import init_db_pool, close_db_pool
+from app.routers import estatisticas, trechos, ocorrencias, rotas, simulacao, relatorios
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -18,9 +13,9 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="SPRAIN Geo-Engine API",
-    description="Servicos geoespaciais e calculo de intransitabilidade viaria por alagamento.",
     version="1.0.0",
-    lifespan=lifespan,
+    description="Servicos geoespaciais e calculo de intransitabilidade viaria por alagamento",
+    lifespan=lifespan
 )
 
 app.add_middleware(
@@ -34,11 +29,17 @@ app.add_middleware(
 app.include_router(trechos.router)
 app.include_router(estatisticas.router)
 app.include_router(ocorrencias.router)
+app.include_router(rotas.router)
+app.include_router(simulacao.router)
+app.include_router(relatorios.router)
+
+app.mount("/static", StaticFiles(directory="api/static"), name="static")
 
 @app.get("/", include_in_schema=False)
-async def serve_map():
-    return FileResponse(INDEX_HTML)
+async def root():
+    from fastapi.responses import FileResponse
+    return FileResponse("api/static/index.html")
 
 @app.get("/health", tags=["Infraestrutura"])
 async def health_check():
-    return {"status": "ok", "service": "sprain-api"}
+    return {"status": "operacional"}

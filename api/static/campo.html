@@ -1,0 +1,96 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>SPRAIN - Alerta Rápido</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, sans-serif; }
+    body { background: #0f172a; color: #fff; display: flex; flex-direction: column; min-height: 100vh; padding: 16px; }
+    header { text-align: center; margin-bottom: 12px; }
+    h1 { font-size: 1.25rem; color: #38bdf8; }
+    .status-gps { font-size: 0.85rem; color: #94a3b8; margin-top: 4px; }
+    .select-corp { width: 100%; padding: 10px; border-radius: 8px; background: #1e293b; color: #fff; border: 1px solid #334155; margin-bottom: 16px; font-size: 1rem; }
+    .grid-botoes { display: grid; grid-template-rows: repeat(4, 1fr); gap: 12px; flex: 1; }
+    .btn { border: none; border-radius: 12px; font-size: 1.1rem; font-weight: 700; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; touch-action: manipulation; }
+    .btn span { font-size: 0.8rem; font-weight: 400; opacity: 0.85; margin-top: 4px; }
+    .btn-verde { background: #15803d; }
+    .btn-amarelo { background: #ca8a04; }
+    .btn-laranja { background: #ea580c; }
+    .btn-vermelho { background: #b91c1c; }
+    .btn:active { transform: scale(0.98); opacity: 0.9; }
+    #msg { margin-top: 12px; text-align: center; font-size: 0.9rem; min-height: 1.2rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>SPRAIN Campo</h1>
+    <div id="gps" class="status-gps">Buscando localização...</div>
+  </header>
+
+  <select id="corp" class="select-corp">
+    <option value="DEFESA_CIVIL">🛡️ Defesa Civil</option>
+    <option value="TRANSITO">🚦 Trânsito / GCM</option>
+    <option value="BOMBEIROS">🚒 Bombeiros</option>
+  </select>
+
+  <div class="grid-botoes">
+    <button class="btn btn-vermelho" onclick="disparar('VERMELHO')">🔴 VERMELHO <span>Bloqueio Total / Submerso</span></button>
+    <button class="btn btn-laranja" onclick="disparar('LARANJA')">🟠 LARANJA <span>Risco Alto / Apenas Pesados</span></button>
+    <button class="btn btn-amarelo" onclick="disparar('AMARELO')">🟡 AMARELO <span>Lâmina Baixa / Atenção</span></button>
+    <button class="btn btn-verde" onclick="disparar('VERDE')">🟢 VERDE <span>Via Liberada / Normal</span></button>
+  </div>
+
+  <div id="msg"></div>
+
+  <script>
+    let pos = null;
+    const gpsEl = document.getElementById('gps');
+    const msgEl = document.getElementById('msg');
+
+    navigator.geolocation.watchPosition(
+      (p) => {
+        pos = { lat: p.coords.latitude, lon: p.coords.longitude };
+        gpsEl.textContent = `GPS Ativo: ${pos.lat.toFixed(4)}, ${pos.lon.toFixed(4)} (±${Math.round(p.coords.accuracy)}m)`;
+        gpsEl.style.color = "#4ade80";
+      },
+      (err) => {
+        gpsEl.textContent = "Erro ao obter GPS: ative a localização.";
+        gpsEl.style.color = "#f87171";
+      },
+      { enableHighAccuracy: true }
+    );
+
+    async function disparar(nivel) {
+      if (!pos) {
+        msgEl.textContent = "Aguarde sinal de GPS antes de registrar.";
+        msgEl.style.color = "#f87171";
+        return;
+      }
+      msgEl.textContent = "Transmitindo...";
+      msgEl.style.color = "#38bdf8";
+
+      try {
+        const res = await fetch('/api/v1/ocorrencias/alerta-rapido', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            latitude: pos.lat,
+            longitude: pos.lon,
+            nivel: nivel,
+            corporacao: document.getElementById('corp').value
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Erro na requisição");
+
+        msgEl.textContent = `Via atualizada: ${data.via} (${nivel})`;
+        msgEl.style.color = "#4ade80";
+      } catch (e) {
+        msgEl.textContent = e.message;
+        msgEl.style.color = "#f87171";
+      }
+    }
+  </script>
+</body>
+</html>

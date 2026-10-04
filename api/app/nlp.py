@@ -1,57 +1,17 @@
-import re
-from typing import Dict, Any, List
+﻿import re
 
-PREFIXOS = r"(?:rua|r\.|av\.|avenida|travessa|tv\.|estrada|estr\.|alameda|al\.)"
-STOPWORDS_VIAS = {
-    "totalmente", "parcialmente", "completamente", "muito", "alagada", 
-    "alagado", "intransitavel", "bloqueada", "bloqueado", "interditada",
-    "parada", "parado", "na", "no", "em", "altura", "proximo", "próximo",
-    "sentido", "perto", "esquina", "devido"
-}
-
-PADRAO_PREFIXO = re.compile(
-    rf"\b({PREFIXOS}\s+[A-Za-zÀ-ÿ0-9\s'-]+)",
-    re.IGNORECASE
-)
-
-TERMOS_INTRANSITAVEL = [
-    "intransitavel", "intransitável", "bloqueada", "bloqueado", 
-    "alagada", "alagado", "alagamento", "parada", "parado", 
-    "subiu a agua", "subiu a água", "interditada", "interditado"
-]
-TERMOS_TRANSITAVEL = [
-    "liberada", "liberado", "transitavel", "transitável", 
-    "normalizada", "normalizado", "escoou", "desobstruida", "desobstruído"
-]
-
-def limpar_nome_via(candidato: str) -> str:
-    palavras = candidato.strip().split()
-    resultado = []
-    for i, p in enumerate(palavras):
-        p_clean = re.sub(r"[^\wÀ-ÿ-]", "", p.lower())
-        if i > 0 and p_clean in STOPWORDS_VIAS:
-            break
-        resultado.append(p)
-    return " ".join(resultado).strip()
-
-def extrair_logradouros_e_status(texto: str) -> Dict[str, Any]:
-    texto_limpo = texto.strip()
-    texto_lower = texto_limpo.lower()
+def extrair_dados_ocorrencia(texto: str) -> dict:
+    t = texto.lower()
+    status = "INTRANSITAVEL" if any(w in t for w in ["intransitavel", "alagada", "alagamento", "bloqueada", "fechada", "submersa"]) else "TRANSITAVEL"
+    severidade = "ALTA" if any(w in t for w in ["totalmente", "grave", "intransitavel", "critico"]) else "MODERADA"
     
-    status = "ALERTA"
-    if any(termo in texto_lower for termo in TERMOS_INTRANSITAVEL):
-        status = "INTRANSITAVEL"
-    elif any(termo in texto_lower for termo in TERMOS_TRANSITAVEL):
-        status = "TRANSITAVEL"
+    padrao = r'(?:avenida|ave?\.?|rua|r\.|alameda|al\.|rodovia|estrada)\s+([a-zA-Z0-9\s\-]+?)(?=\s+(?:na altura|proximo|esquina|com|totalmente|alagada|bloqueada|$))'
+    m = re.search(padrao, texto, re.IGNORECASE)
+    via = m.group(1).strip() if m else None
+    
+    if not via:
+        palavras = texto.split()
+        if len(palavras) >= 2:
+            via = " ".join(palavras[:3])
 
-    vias: List[str] = []
-    for match in PADRAO_PREFIXO.finditer(texto_limpo):
-        bruto = match.group(1)
-        nome_tratado = limpar_nome_via(bruto)
-        if len(nome_tratado.split()) >= 2:
-            vias.append(nome_tratado)
-
-    return {
-        "status": status,
-        "candidatos_vias": list(set(vias))
-    }
+    return {"via": via, "status": status, "severidade": severidade}
