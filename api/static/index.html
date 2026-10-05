@@ -83,7 +83,7 @@
           <div class="legenda-item"><span class="cor-box" style="background:#f97316;"></span>Alto (60-70)</div>
           <div class="legenda-item"><span class="cor-box" style="background:#ef4444;"></span>Critico (&ge;70)</div>
           <div class="legenda-item" style="grid-column: span 2;"><span class="cor-box" style="background:#d946ef; height:4px; width:16px;"></span>Vias Bloqueadas</div>
-          <div class="legenda-item" style="grid-column: span 2;"><span class="cor-box" style="background:#00f5ff; height:4px; width:16px;"></span>Rota Tática Segura</div>
+          <div class="legenda-item" style="grid-column: span 2;"><span class="cor-box" style="background:#ff007f; height:4px; width:16px;"></span>Rota Tática Segura</div>
         </div>
       </div>
 
@@ -176,29 +176,41 @@
     }
 
     async function tracarRotaSegura() {
-      const st = document.getElementById('rota-status');
-      st.innerText = 'Calculando melhor rota sem alagamentos...';
-      try {
+    const st = document.getElementById('rota-status');
+    st.innerText = 'Calculando melhor rota sem alagamentos...';
+    try {
         const res = await fetch('/api/v1/rotas/calcular', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            origem_lat: pontoOrigem[1],
-            origem_lon: pontoOrigem[0],
-            destino_lat: pontoDestino[1],
-            destino_lon: pontoDestino[0]
-          })
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                origem_lat: pontoOrigem[1],
+                origem_lon: pontoOrigem[0],
+                destino_lat: pontoDestino[1],
+                destino_lon: pontoDestino[0]
+            })
         });
-
         if (!res.ok) throw new Error();
         const data = await res.json();
-        if (data.rota_geojson && map.getSource('rota-source')) {
-          map.getSource('rota-source').setData(data.rota_geojson);
-          st.innerText = `Rota traçada: ${data.distancia_km || ''} km (trechos seguros)`;
+        const geojson = data.rota_geojson || data;
+
+        if (!map.getSource('rota-source')) {
+            map.addSource('rota-source', { type: 'geojson', data: geojson });
+            map.addLayer({
+                id: 'rota-linha',
+                type: 'line',
+                source: 'rota-source',
+                paint: {
+                    'line-color': '#ff007f',
+                    'line-width': 8,
+                    'line-opacity': 0.95
+                }
+            });
         } else {
-          st.innerText = 'Aviso: nenhum trajeto conectado sem vias alagadas.';
+            map.getSource('rota-source').setData(geojson);
         }
-      } catch (err) {
+
+        st.innerText = `Rota tra�ada: ${data.distancia_km || '0'} km (trechos seguros)`;
+    } catch (err) {
         st.innerText = 'Erro ao processar roteamento com o servidor.';
       }
     }
@@ -300,8 +312,8 @@
         type: 'line',
         source: 'rota-source',
         paint: {
-          'line-color': '#00f5ff',
-          'line-width': 6,
+          'line-color': '#ff007f',
+          'line-width': 8,
           'line-opacity': 0.95
         }
       });
@@ -451,3 +463,5 @@
 </body>
 
 </html>
+
+

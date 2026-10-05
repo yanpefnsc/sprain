@@ -1,4 +1,4 @@
-from typing import AsyncGenerator
+from typing import AsyncIterator
 import asyncpg
 from app.config import settings
 
@@ -17,7 +17,7 @@ async def close_db_pool() -> None:
     if db_pool:
         await db_pool.close()
 
-async def get_connection() -> AsyncGenerator[asyncpg.Connection, None]:
+async def get_connection() -> AsyncIterator[asyncpg.Connection]:
     if db_pool is None:
         raise RuntimeError("Pool de banco de dados nao inicializado.")
     async with db_pool.acquire() as connection:
