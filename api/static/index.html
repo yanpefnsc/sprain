@@ -35,8 +35,8 @@
     .card-alerta .via { font-weight: 700; font-size: 0.85rem; color: #f8fafc; }
     .card-alerta .info { font-size: 0.75rem; color: #cbd5e1; margin-top: 4px; line-height: 1.3; }
     .card-alerta .meta { font-size: 0.7rem; color: #94a3b8; margin-top: 6px; display: flex; justify-content: space-between; }
-    .rota-status { font-size: 0.75rem; color: #38bdf8; margin-top: 6px; font-weight: 600; display: none; }
-  
+    .rota-status { font-size: 0.75rem; color: #38bdf8; margin-top: 6px; font-weight: 600; display: none; line-height: 1.4; }
+
     /* Notificação Toast Tática */
     #toast-container { position: fixed; top: 70px; right: 380px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
     .toast-alerta { background: #1e293b; border-left: 5px solid #ef4444; color: #fff; padding: 12px 18px; border-radius: 6px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.5); font-size: 0.85rem; font-weight: 600; display: flex; flex-direction: column; gap: 3px; pointer-events: auto; animation: slideIn 0.3s ease-out; }
@@ -51,7 +51,7 @@
   <header>
     <div class="brand">SPRAIN <span>&bull; Sala de Situacao (Itaquera)</span></div>
     <div class="toolbar">
-            <button class="btn btn-rota" id="btn-modo-rota" onclick="alternarModoRota()">+ Tracar Rota Segura</button>
+      <button class="btn btn-rota" id="btn-modo-rota" onclick="alternarModoRota()">+ Tracar Rota Segura</button>
       <a href="/api/v1/relatorios/boletim-defesa-civil/csv" class="btn" style="text-decoration:none; display:inline-flex; align-items:center;" download>&darr; Boletim CSV</a>
       <a href="/api/v1/relatorios/boletim-defesa-civil/json" target="_blank" class="btn" style="text-decoration:none; display:inline-flex; align-items:center;">&darr; Boletim JSON</a>
       <div class="tool-group">
@@ -84,6 +84,7 @@
           <div class="legenda-item"><span class="cor-box" style="background:#ef4444;"></span>Critico (&ge;70)</div>
           <div class="legenda-item" style="grid-column: span 2;"><span class="cor-box" style="background:#d946ef; height:4px; width:16px;"></span>Vias Bloqueadas</div>
           <div class="legenda-item" style="grid-column: span 2;"><span class="cor-box" style="background:#ff007f; height:4px; width:16px;"></span>Rota Tática Segura</div>
+          <div class="legenda-item" style="grid-column: span 2;"><span class="cor-box" style="background:#f97316; height:4px; width:16px;"></span>Rota Contingência / Alternativa</div>
         </div>
       </div>
 
@@ -109,7 +110,6 @@
     });
 
     let dadosTrechosGeoJSON = null;
-
     let totalOcorrenciasAnterior = 0;
 
     function tocarAlertaSonoro() {
@@ -118,7 +118,7 @@
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(880, audioCtx.currentTime); // Tom agudo de alerta A5
+        osc.frequency.setValueAtTime(880, audioCtx.currentTime);
         osc.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 0.25);
         gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.25);
@@ -138,7 +138,7 @@
       toast.innerHTML = `<div>${titulo}</div><span>${detalhe}</span>`;
       tc.appendChild(toast);
       tocarAlertaSonoro();
-      setTimeout(() => { toast.remove(); }, 4500);
+      setTimeout(() => { toast.remove(); }, 5000);
     }
 
     let modoRotaAtivo = false;
@@ -146,6 +146,7 @@
     let pontoDestino = null;
     let markerOrigem = null;
     let markerDestino = null;
+    let markerAlternativo = null;
 
     function alternarModoRota() {
       modoRotaAtivo = !modoRotaAtivo;
@@ -155,6 +156,7 @@
         btn.innerText = 'Cancelar Traçado';
         btn.classList.add('ativo');
         st.style.display = 'block';
+        st.style.color = '#38bdf8';
         st.innerText = 'Clique no mapa para marcar a ORIGEM.';
         limparRota();
       } else {
@@ -170,48 +172,89 @@
       pontoDestino = null;
       if (markerOrigem) { markerOrigem.remove(); markerOrigem = null; }
       if (markerDestino) { markerDestino.remove(); markerDestino = null; }
+      if (markerAlternativo) { markerAlternativo.remove(); markerAlternativo = null; }
       if (map.getSource('rota-source')) {
         map.getSource('rota-source').setData({ type: 'FeatureCollection', features: [] });
       }
     }
 
     async function tracarRotaSegura() {
-    const st = document.getElementById('rota-status');
-    st.innerText = 'Calculando melhor rota sem alagamentos...';
-    try {
-        const res = await fetch('/api/v1/rotas/calcular', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                origem_lat: pontoOrigem[1],
-                origem_lon: pontoOrigem[0],
-                destino_lat: pontoDestino[1],
-                destino_lon: pontoDestino[0]
-            })
-        });
-        if (!res.ok) throw new Error();
-        const data = await res.json();
-        const geojson = data.rota_geojson || data;
+      const st = document.getElementById('rota-status');
+      st.innerText = 'Calculando melhor rota sem alagamentos...';
+      st.style.color = '#38bdf8';
 
-        if (!map.getSource('rota-source')) {
-            map.addSource('rota-source', { type: 'geojson', data: geojson });
-            map.addLayer({
-                id: 'rota-linha',
-                type: 'line',
-                source: 'rota-source',
-                paint: {
-                    'line-color': '#ff007f',
-                    'line-width': 8,
-                    'line-opacity': 0.95
-                }
-            });
-        } else {
-            map.getSource('rota-source').setData(geojson);
+      if (markerAlternativo) {
+        markerAlternativo.remove();
+        markerAlternativo = null;
+      }
+
+      try {
+        const res = await fetch('/api/v1/rotas/calcular', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            origem_lat: pontoOrigem[1],
+            origem_lon: pontoOrigem[0],
+            destino_lat: pontoDestino[1],
+            destino_lon: pontoDestino[0]
+          })
+        });
+
+        if (!res.ok) {
+          const erro = await res.json().catch(() => ({}));
+          throw new Error(erro.detail || 'Falha ao calcular rota');
         }
 
-        st.innerText = `Rota tra�ada: ${data.distancia_km || '0'} km (trechos seguros)`;
-    } catch (err) {
-        st.innerText = 'Erro ao processar roteamento com o servidor.';
+        const data = await res.json();
+        const geojson = data.rota_geojson || { type: 'FeatureCollection', features: [] };
+
+        if (map.getSource('rota-source')) {
+          map.getSource('rota-source').setData(geojson);
+        }
+
+        // Cenário 1: Rota 100% Segura
+        if (data.rota_segura) {
+          map.setPaintProperty('rota-linha', 'line-color', '#ff007f');
+          map.setPaintProperty('rota-linha', 'line-dasharray', [1]); // Linha contínua
+          st.style.color = '#22c55e';
+          st.innerText = `Rota traçada: ${data.distancia_km || '0'} km (todos os trechos seguros).`;
+          return;
+        }
+
+        // Cenário 2: Sem rota segura, mas existe ponto alternativo alcançável
+        if (data.ponto_alternativo) {
+          map.setPaintProperty('rota-linha', 'line-color', '#f97316');
+          map.setPaintProperty('rota-linha', 'line-dasharray', [2, 2]); // Linha tracejada tática
+
+          const el = document.createElement('div');
+          el.innerHTML = '📍';
+          el.style.fontSize = '24px';
+          el.style.cursor = 'pointer';
+
+          markerAlternativo = new maplibregl.Marker({ element: el })
+            .setLngLat([data.ponto_alternativo.lon, data.ponto_alternativo.lat])
+            .setPopup(new maplibregl.Popup({ offset: 25 }).setHTML(`
+              <div style="color:#0f172a; font-size:12px;">
+                <strong>Ponto Seguro Mais Próximo</strong><br>
+                Restam <strong>${data.ponto_alternativo.distancia_ate_destino_m}m</strong> até ao destino (bloqueado por alagamento).
+              </div>
+            `))
+            .addTo(map);
+
+          st.style.color = '#f97316';
+          st.innerText = `Atenção: Destino bloqueado! Rota até ao ponto seguro mais próximo (${data.distancia_km} km). Faltam ${data.ponto_alternativo.distancia_ate_destino_m}m a pé.`;
+          dispararToast('Destino Inacessível', 'Desvio gerado para o ponto transitável mais próximo.', 'LARANJA');
+          return;
+        }
+
+        // Cenário 3: Origem cercada / nenhum ponto alcançável
+        st.style.color = '#ef4444';
+        st.innerText = data.mensagem || 'Origem cercada por alagamentos. Permaneça em local seguro!';
+        dispararToast('Evacuação Impossibilitada', data.mensagem || 'Origem isolada por vias intransitáveis.', 'VERMELHO');
+
+      } catch (err) {
+        st.style.color = '#ef4444';
+        st.innerText = err.message || 'Erro ao processar roteamento com o servidor.';
       }
     }
 
@@ -461,7 +504,4 @@
     }
   </script>
 </body>
-
 </html>
-
-
