@@ -3,3 +3,5 @@ __pycache__/
 dados/brutos/
 dados/processados/
 *.zip
+backup_banco_itaquera.sql
+*.sql
