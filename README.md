@@ -1,19 +1,35 @@
-﻿# Plataforma de Mapeamento de Intransitabilidade Viaria por Enchentes
+﻿# SPRAIN • Plataforma de Gestão Tática de Intransitabilidade Viária
 
-Pipeline geoespacial de alta resolucao para modelagem e classificacao do Indice de Vulnerabilidade de Intransitabilidade (IVI) em escala de trecho viario.
+Sistema geoespacial integrado para mitigação de risco de enchentes, roteamento de emergência e apoio à decisão operacional no distrito de Itaquera (São Paulo/SP).
 
-## Estrutura do Banco de Dados (PostGIS)
-- `distrito_itaquera`: Poligono territorial de referencia.
-- `trechos_osm`: 2.978 trechos viarios com atributos fisicos, hidrologicos e estatisticos.
-- `hidrografia_osm`: Rede hidrografica detalhada extraida do OpenStreetMap.
-- `setores_ibge_itaquera`: 315 setores censitarios oficiais do IBGE.
-- `alagamentos_cge`: Ocorrencias historicas de pontos intransitaveis do CGE-SP.
+---
 
-## Metricas Consolidadas (Itaquera)
-- **Critico (IVI >= 70):** 328 trechos viarios (Score medio: 79.8)
-- **Alto (50 <= IVI < 70):** 1.052 trechos viarios (Score medio: 60.0)
-- **Medio (30 <= IVI < 50):** 1.046 trechos viarios (Score medio: 41.4)
-- **Baixo (IVI < 30):** 552 trechos viarios (Score medio: 22.3)
+## 🚀 Funcionalidades Principais
 
-## Arquivos Gerados
-- GeoPackage para GIS / Mapas Web: `dados/processados/vulnerabilidade_itaquera.gpkg`
+- **Modelagem IVI:** Cálculo do Índice de Vulnerabilidade de Intransitabilidade via relevo, proximidade hidrográfica e histórico CGE.
+- **Sala de Situação Central (`/`):**
+  - Mapa vetorial com estilos de alto contraste.
+  - Sincronização em tempo real de vias bloqueadas.
+  - Cálculo de **Rota Segura** contornando vias com retenção hídrica.
+  - Simulador de cenários pluviométricos (mm).
+  - Exportação de Boletins Oficiais em CSV e JSON.
+- **Terminal de Campo para Viaturas (`/static/campo.html`):**
+  - Georreferenciamento e resolução reversa de logradouro em tempo real via PostGIS.
+  - Despacho tático por toque de severidade (Transitável, Atenção, Crítico Leve, Intransitável).
+  - Atalhos de viatura para simulação e homologação de rotas.
+
+---
+
+## 🛠️ Stack Tecnológica
+
+- **Banco de Dados Espacial:** PostgreSQL 16 + PostGIS 3.4
+- **Backend:** FastAPI (Python) com `asyncpg`
+- **Frontend / GIS Web:** MapLibre GL JS, OpenStreetMap e CartoDB Dark Matter
+- **Infraestrutura:** Docker e Docker Compose
+
+---
+
+## 📦 Como Subir com Docker
+
+```bash
+docker compose up --build -d

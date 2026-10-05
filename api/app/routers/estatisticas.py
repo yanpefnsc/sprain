@@ -21,3 +21,26 @@ async def get_estatisticas_distrito(
     '''
     row = await conn.fetchrow(sql)
     return dict(row)
+
+
+@router.get("/historico-temporal")
+async def obter_historico_temporal(conn: asyncpg.Connection = Depends(get_connection)):
+    query_niveis = """
+        SELECT COALESCE(severidade, 'NORMAL') AS nivel, COUNT(*) AS total
+        FROM ocorrencias_ativas
+        GROUP BY severidade;
+    """
+    niveis = await conn.fetch(query_niveis)
+    
+    query_horas = """
+        SELECT TO_CHAR(registrado_em, 'HH24:00') AS faixa_hora, COUNT(*) AS qtd
+        FROM ocorrencias_ativas
+        GROUP BY faixa_hora
+        ORDER BY faixa_hora ASC;
+    """
+    horas = await conn.fetch(query_horas)
+    
+    return {
+        "niveis": {r["nivel"]: r["total"] for r in niveis},
+        "temporal": [{"hora": r["faixa_hora"], "total": r["qtd"]} for r in horas]
+    }

@@ -44,6 +44,7 @@
     @keyframes slideIn { from { transform: translateX(100px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
   </style>
 
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
   <div id="toast-container"></div>
@@ -59,6 +60,7 @@
         <span id="lbl-chuva" style="font-weight:700; color:#38bdf8; min-width: 45px;">50 mm</span>
         <button class="btn btn-simular" onclick="executarSimulacao()">Simular</button>
       </div>
+      <button class="btn" style="background:#4f46e5; border-color:#4338ca;" onclick="abrirModalGraficos()">📊 Telemetria Temporal</button>
       <button class="btn btn-reset" onclick="resetarVias()">Normalizar Malha</button>
     </div>
   </header>
@@ -359,5 +361,93 @@
         });
     });
   </script>
+
+  <!-- Modal de Análise Temporal -->
+  <div id="modal-graficos" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:10000; align-items:center; justify-content:center;">
+    <div style="background:#111827; border:1px solid #1f2937; border-radius:10px; width:680px; max-width:92%; padding:20px; box-shadow:0 20px 25px -5px rgba(0,0,0,0.5);">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+        <h2 style="font-size:1.1rem; color:#38bdf8; font-weight:800;">Evolução Temporal & Distribuição Tática</h2>
+        <button onclick="fecharModalGraficos()" style="background:transparent; border:none; color:#94a3b8; font-size:1.4rem; cursor:pointer;">&times;</button>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+        <div style="background:#1e293b; padding:12px; border-radius:8px;">
+          <h3 style="font-size:0.8rem; color:#94a3b8; margin-bottom:10px; text-align:center;">Severidade das Ocorrências</h3>
+          <canvas id="chart-severidade" height="200"></canvas>
+        </div>
+        <div style="background:#1e293b; padding:12px; border-radius:8px;">
+          <h3 style="font-size:0.8rem; color:#94a3b8; margin-bottom:10px; text-align:center;">Incidentes por Horário</h3>
+          <canvas id="chart-tempo" height="200"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let chartSev = null;
+    let chartTmp = null;
+
+    async function abrirModalGraficos() {
+      document.getElementById('modal-graficos').style.display = 'flex';
+      try {
+        const res = await fetch('/api/v1/estatisticas/historico-temporal');
+        const data = await res.json();
+        
+        const ctxSev = document.getElementById('chart-severidade').getContext('2d');
+        const ctxTmp = document.getElementById('chart-tempo').getContext('2d');
+
+        if (chartSev) chartSev.destroy();
+        if (chartTmp) chartTmp.destroy();
+
+        chartSev = new Chart(ctxSev, {
+          type: 'doughnut',
+          data: {
+            labels: ['Vermelho', 'Laranja', 'Amarelo', 'Verde'],
+            datasets: [{
+              data: [
+                data.niveis['VERMELHO'] || 0,
+                data.niveis['LARANJA'] || 0,
+                data.niveis['AMARELO'] || 0,
+                data.niveis['VERDE'] || 0
+              ],
+              backgroundColor: ['#ef4444', '#f97316', '#eab308', '#22c55e'],
+              borderWidth: 0
+            }]
+          },
+          options: { responsive: true, plugins: { legend: { labels: { color: '#cbd5e1', font: { size: 10 } } } } }
+        });
+
+        const rotulos = data.temporal.length ? data.temporal.map(t => t.hora) : ['Agora'];
+        const valores = data.temporal.length ? data.temporal.map(t => t.total) : [0];
+
+        chartTmp = new Chart(ctxTmp, {
+          type: 'bar',
+          data: {
+            labels: rotulos,
+            datasets: [{
+              label: 'Alertas',
+              data: valores,
+              backgroundColor: '#38bdf8',
+              borderRadius: 4
+            }]
+          },
+          options: {
+            responsive: true,
+            scales: {
+              x: { ticks: { color: '#94a3b8' }, grid: { display: false } },
+              y: { ticks: { color: '#94a3b8', stepSize: 1 }, grid: { color: '#334155' } }
+            },
+            plugins: { legend: { display: false } }
+          }
+        });
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    function fecharModalGraficos() {
+      document.getElementById('modal-graficos').style.display = 'none';
+    }
+  </script>
 </body>
+
 </html>
