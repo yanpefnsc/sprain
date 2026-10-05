@@ -1,61 +1,63 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <title>SPRAIN - Sala de Situação Integrada</title>
+  <title>SPRAIN - Sala de Situacao Integrada</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
   <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
     body { display: flex; flex-direction: column; height: 100vh; width: 100vw; overflow: hidden; background: #0b0f19; color: #f1f5f9; }
-    
     header { height: 56px; background: #111827; border-bottom: 1px solid #1f2937; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; z-index: 10; }
     .brand { font-weight: 800; font-size: 1.15rem; color: #38bdf8; display: flex; align-items: center; gap: 8px; }
-    .toolbar { display: flex; align-items: center; gap: 16px; }
+    .toolbar { display: flex; align-items: center; gap: 14px; }
     .tool-group { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; color: #94a3b8; }
-    
     .btn { background: #1e293b; color: #f8fafc; border: 1px solid #334155; padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all 0.2s; }
     .btn:hover { background: #334155; }
-    .btn-simular { background: #0284c7; border-color: #0369a1; }
-    .btn-simular:hover { background: #0369a1; }
+    .btn-rota { background: #0284c7; border-color: #0369a1; }
+    .btn-rota.ativo { background: #22c55e; border-color: #16a34a; }
+    .btn-simular { background: #3b82f6; border-color: #2563eb; }
     .btn-reset { background: #dc2626; border-color: #b91c1c; }
-    .btn-reset:hover { background: #b91c1c; }
-    
     .main-container { display: flex; flex: 1; height: calc(100vh - 56px); position: relative; }
     #map { flex: 1; height: 100%; }
-    
     #sidebar { width: 360px; height: 100%; background: #0f172a; border-left: 1px solid #1e293b; display: flex; flex-direction: column; z-index: 5; }
     .panel-section { padding: 14px; border-bottom: 1px solid #1e293b; }
     .section-title { font-size: 0.85rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; margin-bottom: 10px; display: flex; justify-content: space-between; }
-    
     .input-text { width: 100%; background: #1e293b; border: 1px solid #334155; border-radius: 6px; padding: 8px; color: #fff; font-size: 0.8rem; resize: none; margin-bottom: 8px; }
     .input-text:focus { outline: none; border-color: #38bdf8; }
-    
     .legenda-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 0.72rem; }
     .legenda-item { display: flex; align-items: center; gap: 6px; }
     .cor-box { width: 10px; height: 10px; border-radius: 2px; }
-    
     #feed-alertas { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
     .card-alerta { background: #1e293b; border-radius: 6px; padding: 10px; border-left: 4px solid #38bdf8; cursor: pointer; transition: background 0.15s; }
     .card-alerta:hover { background: #283548; }
     .card-alerta .via { font-weight: 700; font-size: 0.85rem; color: #f8fafc; }
     .card-alerta .info { font-size: 0.75rem; color: #cbd5e1; margin-top: 4px; line-height: 1.3; }
-    .card-alerta .meta { font-size: 0.7rem; color: #94a3b8; margin-top: 6px; display: flex; justify-content: space-between; align-items: center; }
-    
-    .maplibregl-popup-content { background: #0f172a; color: #f8fafc; border-radius: 8px; padding: 12px; border: 1px solid #334155; }
-    .maplibregl-popup-anchor-bottom .maplibregl-popup-tip { border-top-color: #0f172a; }
+    .card-alerta .meta { font-size: 0.7rem; color: #94a3b8; margin-top: 6px; display: flex; justify-content: space-between; }
+    .rota-status { font-size: 0.75rem; color: #38bdf8; margin-top: 6px; font-weight: 600; display: none; }
+  
+    /* Notificação Toast Tática */
+    #toast-container { position: fixed; top: 70px; right: 380px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+    .toast-alerta { background: #1e293b; border-left: 5px solid #ef4444; color: #fff; padding: 12px 18px; border-radius: 6px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.5); font-size: 0.85rem; font-weight: 600; display: flex; flex-direction: column; gap: 3px; pointer-events: auto; animation: slideIn 0.3s ease-out; }
+    .toast-alerta span { font-size: 0.72rem; color: #94a3b8; font-weight: 400; }
+    @keyframes slideIn { from { transform: translateX(100px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
   </style>
+
 </head>
 <body>
+  <div id="toast-container"></div>
   <header>
-    <div class="brand">SPRAIN <span>• Sala de Situação (Itaquera)</span></div>
+    <div class="brand">SPRAIN <span>&bull; Sala de Situacao (Itaquera)</span></div>
     <div class="toolbar">
+            <button class="btn btn-rota" id="btn-modo-rota" onclick="alternarModoRota()">+ Tracar Rota Segura</button>
+      <a href="/api/v1/relatorios/boletim-defesa-civil/csv" class="btn" style="text-decoration:none; display:inline-flex; align-items:center;" download>&darr; Boletim CSV</a>
+      <a href="/api/v1/relatorios/boletim-defesa-civil/json" target="_blank" class="btn" style="text-decoration:none; display:inline-flex; align-items:center;">&darr; Boletim JSON</a>
       <div class="tool-group">
-        <label for="slider-chuva">Cenário de Chuva:</label>
+        <label for="slider-chuva">Chuva:</label>
         <input type="range" id="slider-chuva" min="20" max="110" step="5" value="50" oninput="document.getElementById('lbl-chuva').innerText = this.value + ' mm'">
         <span id="lbl-chuva" style="font-weight:700; color:#38bdf8; min-width: 45px;">50 mm</span>
-        <button class="btn btn-simular" onclick="executarSimulacao()">Simular Impacto</button>
+        <button class="btn btn-simular" onclick="executarSimulacao()">Simular</button>
       </div>
       <button class="btn btn-reset" onclick="resetarVias()">Normalizar Malha</button>
     </div>
@@ -66,31 +68,32 @@
     <div id="sidebar">
       <div class="panel-section">
         <div class="section-title">Despacho Textual (NLP)</div>
-        <textarea id="txt-ocorrencia" class="input-text" rows="2" placeholder="Ex: Ponto critico de alagamento na Rua Sabbado D'Angelo"></textarea>
+        <textarea id="txt-ocorrencia" class="input-text" rows="2" placeholder="Ex: Alagamento grave na Rua Sabbado D Angelo"></textarea>
         <button class="btn" style="width:100%;" onclick="enviarRelatoTexto()">Processar e Interditar</button>
+        <div class="rota-status" id="rota-status"></div>
       </div>
 
       <div class="panel-section">
-        <div class="section-title">Legenda de Vulnerabilidade (IVI)</div>
+        <div class="section-title">Vulnerabilidade (IVI)</div>
         <div class="legenda-grid">
-          <div class="legenda-item"><span class="cor-box" style="background:#22c55e;"></span>Baixo (<40)</div>
-          <div class="legenda-item"><span class="cor-box" style="background:#eab308;"></span>Médio (40-60)</div>
+          <div class="legenda-item"><span class="cor-box" style="background:#22c55e;"></span>Baixo (&lt;40)</div>
+          <div class="legenda-item"><span class="cor-box" style="background:#eab308;"></span>Medio (40-60)</div>
           <div class="legenda-item"><span class="cor-box" style="background:#f97316;"></span>Alto (60-70)</div>
-          <div class="legenda-item"><span class="cor-box" style="background:#ef4444;"></span>Crítico (≥70)</div>
-          <div class="legenda-item" style="grid-column: span 2;"><span class="cor-box" style="background:#d946ef; height:4px; width:16px;"></span>Vias Bloqueadas (Intransitáveis)</div>
-          <div class="legenda-item" style="grid-column: span 2;"><span class="cor-box" style="background:#38bdf8; height:4px; width:16px;"></span>Rota Tática Segura</div>
+          <div class="legenda-item"><span class="cor-box" style="background:#ef4444;"></span>Critico (&ge;70)</div>
+          <div class="legenda-item" style="grid-column: span 2;"><span class="cor-box" style="background:#d946ef; height:4px; width:16px;"></span>Vias Bloqueadas</div>
+          <div class="legenda-item" style="grid-column: span 2;"><span class="cor-box" style="background:#00f5ff; height:4px; width:16px;"></span>Rota Tática Segura</div>
         </div>
       </div>
 
       <div class="panel-section" style="padding-bottom: 4px;">
         <div class="section-title">
-          <span>Ocorrências Ativas</span>
+          <span>Ocorrencias Ativas</span>
           <span id="contador-alertas" style="color:#38bdf8;">0</span>
         </div>
       </div>
 
       <div id="feed-alertas">
-        <div style="color: #64748b; font-size: 0.8rem;">A sincronizar malha viária...</div>
+        <div style="color: #64748b; font-size: 0.8rem;">Sincronizando malha viaria...</div>
       </div>
     </div>
   </div>
@@ -104,6 +107,99 @@
     });
 
     let dadosTrechosGeoJSON = null;
+
+    let totalOcorrenciasAnterior = 0;
+
+    function tocarAlertaSonoro() {
+      try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, audioCtx.currentTime); // Tom agudo de alerta A5
+        osc.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 0.25);
+        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.25);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.25);
+      } catch (e) {}
+    }
+
+    function dispararToast(titulo, detalhe, severidade) {
+      const tc = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = 'toast-alerta';
+      if (severidade === 'LARANJA') toast.style.borderLeftColor = '#f97316';
+      if (severidade === 'AMARELO') toast.style.borderLeftColor = '#eab308';
+      toast.innerHTML = `<div>${titulo}</div><span>${detalhe}</span>`;
+      tc.appendChild(toast);
+      tocarAlertaSonoro();
+      setTimeout(() => { toast.remove(); }, 4500);
+    }
+
+    let modoRotaAtivo = false;
+    let pontoOrigem = null;
+    let pontoDestino = null;
+    let markerOrigem = null;
+    let markerDestino = null;
+
+    function alternarModoRota() {
+      modoRotaAtivo = !modoRotaAtivo;
+      const btn = document.getElementById('btn-modo-rota');
+      const st = document.getElementById('rota-status');
+      if (modoRotaAtivo) {
+        btn.innerText = 'Cancelar Traçado';
+        btn.classList.add('ativo');
+        st.style.display = 'block';
+        st.innerText = 'Clique no mapa para marcar a ORIGEM.';
+        limparRota();
+      } else {
+        btn.innerText = '+ Traçar Rota Segura';
+        btn.classList.remove('ativo');
+        st.style.display = 'none';
+        limparRota();
+      }
+    }
+
+    function limparRota() {
+      pontoOrigem = null;
+      pontoDestino = null;
+      if (markerOrigem) { markerOrigem.remove(); markerOrigem = null; }
+      if (markerDestino) { markerDestino.remove(); markerDestino = null; }
+      if (map.getSource('rota-source')) {
+        map.getSource('rota-source').setData({ type: 'FeatureCollection', features: [] });
+      }
+    }
+
+    async function tracarRotaSegura() {
+      const st = document.getElementById('rota-status');
+      st.innerText = 'Calculando melhor rota sem alagamentos...';
+      try {
+        const res = await fetch('/api/v1/rotas/calcular', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            origem_lat: pontoOrigem[1],
+            origem_lon: pontoOrigem[0],
+            destino_lat: pontoDestino[1],
+            destino_lon: pontoDestino[0]
+          })
+        });
+
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        if (data.rota_geojson && map.getSource('rota-source')) {
+          map.getSource('rota-source').setData(data.rota_geojson);
+          st.innerText = `Rota traçada: ${data.distancia_km || ''} km (trechos seguros)`;
+        } else {
+          st.innerText = 'Aviso: nenhum trajeto conectado sem vias alagadas.';
+        }
+      } catch (err) {
+        st.innerText = 'Erro ao processar roteamento com o servidor.';
+      }
+    }
 
     function corPorSeveridade(sev) {
       if (sev === 'VERMELHO') return '#ef4444';
@@ -123,7 +219,14 @@
         const resAtivas = await fetch('/api/v1/ocorrencias/ativas');
         const alertas = await resAtivas.json();
         const feed = document.getElementById('feed-alertas');
-        document.getElementById('contador-alertas').innerText = alertas ? alertas.length : 0;
+        const totalAtual = alertas ? alertas.length : 0;
+
+        if (totalAtual > totalOcorrenciasAnterior && totalOcorrenciasAnterior !== 0) {
+          const ultimo = alertas[0];
+          dispararToast('Novo Bloqueio Registado', `${ultimo.nome_via || 'Via Crítica'} - Nível ${ultimo.severidade}`, ultimo.severidade);
+        }
+        totalOcorrenciasAnterior = totalAtual;
+        document.getElementById('contador-alertas').innerText = totalAtual;
 
         if (!alertas || alertas.length === 0) {
           feed.innerHTML = '<div style="color: #64748b; font-size: 0.8rem;">Todas as vias transitáveis.</div>';
@@ -167,6 +270,7 @@
 
     async function resetarVias() {
       await fetch('/api/v1/ocorrencias/resetar-todas', { method: 'POST' });
+      limparRota();
       sincronizar();
     }
 
@@ -184,6 +288,22 @@
     }
 
     map.on('load', () => {
+      map.addSource('rota-source', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] }
+      });
+
+      map.addLayer({
+        id: 'rota-linha',
+        type: 'line',
+        source: 'rota-source',
+        paint: {
+          'line-color': '#00f5ff',
+          'line-width': 6,
+          'line-opacity': 0.95
+        }
+      });
+
       fetch('/api/v1/trechos/geojson')
         .then(r => r.json())
         .then(data => {
@@ -220,27 +340,22 @@
             }
           });
 
-          map.on('click', 'vias-base', (e) => {
-            const p = e.features[0].properties;
-            new maplibregl.Popup()
-              .setLngLat(e.lngLat)
-              .setHTML(`
-                <div style="font-weight:700; margin-bottom:4px;">${p.nome || 'Via sem nome'}</div>
-                <div style="font-size:0.8rem;">IVI: <strong>${p.ivi !== undefined ? Number(p.ivi).toFixed(1) : 'N/D'}</strong></div>
-                <div style="font-size:0.8rem;">Cota média: ${p.altitude_media ? Number(p.altitude_media).toFixed(1) + ' m' : 'N/D'}</div>
-                <div style="font-size:0.8rem;">Distância rio: ${p.distancia_agua ? Number(p.distancia_agua).toFixed(0) + ' m' : 'N/D'}</div>
-                <div style="font-size:0.8rem; margin-top:4px; color:${p.status_operacional === 'INTRANSITAVEL' ? '#f43f5e' : '#4ade80'};">
-                  Status: <strong>${p.status_operacional || 'TRANSITAVEL'}</strong>
-                </div>
-              `)
-              .addTo(map);
+          map.on('click', (e) => {
+            if (!modoRotaAtivo) return;
+            const st = document.getElementById('rota-status');
+            if (!pontoOrigem) {
+              pontoOrigem = [e.lngLat.lng, e.lngLat.lat];
+              markerOrigem = new maplibregl.Marker({ color: '#22c55e' }).setLngLat(pontoOrigem).addTo(map);
+              st.innerText = 'Origem marcada! Agora clique no DESTINO.';
+            } else if (!pontoDestino) {
+              pontoDestino = [e.lngLat.lng, e.lngLat.lat];
+              markerDestino = new maplibregl.Marker({ color: '#ef4444' }).setLngLat(pontoDestino).addTo(map);
+              tracarRotaSegura();
+            }
           });
 
-          map.on('mouseenter', 'vias-base', () => { map.getCanvas().style.cursor = 'pointer'; });
-          map.on('mouseleave', 'vias-base', () => { map.getCanvas().style.cursor = ''; });
-
           sincronizar();
-          setInterval(sincronizar, 8000);
+          setInterval(sincronizar, 6000);
         });
     });
   </script>
