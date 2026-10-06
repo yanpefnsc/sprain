@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends
+﻿from fastapi import APIRouter, HTTPException, Depends
 import asyncpg
 import re
 import unicodedata
@@ -120,41 +120,56 @@ async def processar_texto(dados: OcorrenciaTextoCreate, conn: asyncpg.Connection
             detail="Nao consegui identificar a situacao da via (alagada, bloqueada, liberada...)."
         )
 
-    ignorar = ("avenida", "rua", "alameda", "estrada", "rodovia")
-    palavras_chave = [w for w in normalizar_texto(extraido["via"]).split() if len(w) > 3 and w not in ignorar]
-    if not palavras_chave:
+    termo_limpo = normalizar_texto(extraido["via"])
+    ignorar = ("avenida", "rua", "alameda", "estrada", "rodovia", "av", "r")
+    palavras = [w for w in termo_limpo.split() if w not in ignorar]
+    termo_busca = " ".join(palavras) if palavras else termo_limpo
+
+    if len(termo_busca) < 3:
         raise HTTPException(status_code=422, detail="Nome da via curto demais para buscar com seguranca.")
 
-    padroes = [f"%{p}%" for p in palavras_chave]
-
     query = """
-    WITH vias_encontradas AS (
-        SELECT id_trecho
+    WITH vias_candidatas AS (
+        SELECT 
+            id_trecho,
+            name,
+            GREATEST(
+                similarity(translate(lower(name), 'áàâãéêíóôõúç', 'aaaaeeiooouc'), $4),
+                word_similarity($4, translate(lower(name), 'áàâãéêíóôõúç', 'aaaaeeiooouc'))
+            ) AS score_sim
         FROM trechos_osm
-        WHERE translate(lower(name), '\u00e1\u00e0\u00e2\u00e3\u00e9\u00ea\u00ed\u00f3\u00f4\u00f5\u00fa\u00e7', 'aaaaeeiooouc') LIKE ALL($4::text[])
-        LIMIT 25
+        WHERE name IS NOT NULL
+          AND (
+              translate(lower(name), 'áàâãéêíóôõúç', 'aaaaeeiooouc') % $4
+              OR word_similarity($4, translate(lower(name), 'áàâãéêíóôõúç', 'aaaaeeiooouc')) >= 0.35
+          )
+        ORDER BY score_sim DESC
+        LIMIT 50
     )
     INSERT INTO estado_operacional_trechos (id_trecho, status, severidade, relato_origem, registrado_em)
     SELECT id_trecho, $1, $2, $3, NOW()
-    FROM vias_encontradas
+    FROM vias_candidatas
     ON CONFLICT (id_trecho) DO UPDATE
     SET status = EXCLUDED.status,
         severidade = EXCLUDED.severidade,
         relato_origem = EXCLUDED.relato_origem,
         registrado_em = NOW()
-    RETURNING id_trecho;
+    RETURNING id_trecho, (SELECT name FROM vias_candidatas vc WHERE vc.id_trecho = estado_operacional_trechos.id_trecho);
     """
 
-    rows = await conn.fetch(query, extraido["status"], extraido["severidade"], dados.texto, padroes)
+    rows = await conn.fetch(query, extraido["status"], extraido["severidade"], dados.texto, termo_busca)
 
     if not rows:
         raise HTTPException(status_code=404, detail=f"Nenhuma via encontrada para '{extraido['via']}'.")
+
+    nomes_afetados = list({r["name"] for r in rows if r["name"]})
 
     return {
         "sucesso": True,
         "trechos_atualizados": len(rows),
         "termo_buscado": extraido["via"],
-        "palavras_chave": palavras_chave,
+        "termo_normalizado": termo_busca,
+        "vias_identificadas": nomes_afetados,
         "status_definido": extraido["status"],
         "severidade": extraido["severidade"]
     }
