@@ -11,7 +11,8 @@ PESO_ALERTA = 10
 
 # Custo dinâmico considerando estado operacional
 CUSTO_DINAMICO = f"""CASE
-    WHEN e.status IN (''INTRANSITAVEL'', ''INTRANSITAVEL_LEVES'') THEN -1
+    WHEN e.status = ''INTRANSITAVEL'' THEN ST_Length(t.geom) * 1000.0
+    WHEN e.status = ''INTRANSITAVEL_LEVES'' THEN ST_Length(t.geom) * 20.0
     WHEN e.status = ''TRANSITAVEL_ALERTA'' THEN ST_Length(t.geom) * {PESO_ALERTA}
     ELSE ST_Length(t.geom)
 END"""

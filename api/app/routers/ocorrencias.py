@@ -86,7 +86,8 @@ async def listar_ocorrencias_ativas(conn: asyncpg.Connection = Depends(get_conne
     FROM estado_operacional_trechos e
     JOIN trechos_osm t ON t.id_trecho = e.id_trecho
     WHERE e.status != 'TRANSITAVEL'
-    ORDER BY e.registrado_em DESC;
+    ORDER BY e.registrado_em DESC
+    LIMIT 50;
     """
     rows = await conn.fetch(query)
     return [dict(row) for row in rows]
@@ -173,3 +174,4 @@ async def processar_texto(dados: OcorrenciaTextoCreate, conn: asyncpg.Connection
         "status_definido": extraido["status"],
         "severidade": extraido["severidade"]
     }
+

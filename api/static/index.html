@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
@@ -37,7 +37,7 @@
     .card-alerta .meta { font-size: 0.7rem; color: #94a3b8; margin-top: 6px; display: flex; justify-content: space-between; }
     .rota-status { font-size: 0.75rem; color: #38bdf8; margin-top: 6px; font-weight: 600; display: none; line-height: 1.4; }
 
-    /* Notificação Toast Tática */
+    /* NotificaÃ§Ã£o Toast TÃ¡tica */
     #toast-container { position: fixed; top: 70px; right: 380px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
     .toast-alerta { background: #1e293b; border-left: 5px solid #ef4444; color: #fff; padding: 12px 18px; border-radius: 6px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.5); font-size: 0.85rem; font-weight: 600; display: flex; flex-direction: column; gap: 3px; pointer-events: auto; animation: slideIn 0.3s ease-out; }
     .toast-alerta span { font-size: 0.72rem; color: #94a3b8; font-weight: 400; }
@@ -60,7 +60,7 @@
         <span id="lbl-chuva" style="font-weight:700; color:#38bdf8; min-width: 45px;">50 mm</span>
         <button class="btn btn-simular" onclick="executarSimulacao()">Simular</button>
       </div>
-      <button class="btn" style="background:#4f46e5; border-color:#4338ca;" onclick="abrirModalGraficos()">📊 Telemetria Temporal</button>
+      <button class="btn" style="background:#4f46e5; border-color:#4338ca;" onclick="abrirModalGraficos()">ðŸ“Š Telemetria Temporal</button>
       <button class="btn btn-reset" onclick="resetarVias()">Normalizar Malha</button>
     </div>
   </header>
@@ -82,9 +82,9 @@
           <div class="legenda-item"><span class="cor-box" style="background:#eab308;"></span>Medio (40-60)</div>
           <div class="legenda-item"><span class="cor-box" style="background:#f97316;"></span>Alto (60-70)</div>
           <div class="legenda-item"><span class="cor-box" style="background:#ef4444;"></span>Critico (&ge;70)</div>
-          <div class="legenda-item" style="grid-column: span 2;"><span class="cor-box" style="background:#d946ef; height:4px; width:16px;"></span>Vias Bloqueadas</div>
-          <div class="legenda-item" style="grid-column: span 2;"><span class="cor-box" style="background:#ff007f; height:4px; width:16px;"></span>Rota Tática Segura</div>
-          <div class="legenda-item" style="grid-column: span 2;"><span class="cor-box" style="background:#f97316; height:4px; width:16px;"></span>Rota Contingência / Alternativa</div>
+          <div class="legenda-item" style="grid-column: span 2;"><span class="cor-box" style="background:#ef4444; height:4px; width:16px;"></span>Vias Bloqueadas</div>
+          <div class="legenda-item" style="grid-column: span 2;"><span class="cor-box" style="background:#ff007f; height:4px; width:16px;"></span>Rota TÃ¡tica Segura</div>
+          <div class="legenda-item" style="grid-column: span 2;"><span class="cor-box" style="background:#f97316; height:4px; width:16px;"></span>Rota ContingÃªncia / Alternativa</div>
         </div>
       </div>
 
@@ -153,14 +153,14 @@
       const btn = document.getElementById('btn-modo-rota');
       const st = document.getElementById('rota-status');
       if (modoRotaAtivo) {
-        btn.innerText = 'Cancelar Traçado';
+        btn.innerText = 'Cancelar TraÃ§ado';
         btn.classList.add('ativo');
         st.style.display = 'block';
         st.style.color = '#38bdf8';
         st.innerText = 'Clique no mapa para marcar a ORIGEM.';
         limparRota();
       } else {
-        btn.innerText = '+ Traçar Rota Segura';
+        btn.innerText = '+ TraÃ§ar Rota Segura';
         btn.classList.remove('ativo');
         st.style.display = 'none';
         limparRota();
@@ -174,11 +174,26 @@
       if (markerDestino) { markerDestino.remove(); markerDestino = null; }
       if (markerAlternativo) { markerAlternativo.remove(); markerAlternativo = null; }
       if (map.getSource('rota-source')) {
+            if (map.getLayer('rota-linha')) { try { map.moveLayer('rota-linha'); } catch(e){} }
         map.getSource('rota-source').setData({ type: 'FeatureCollection', features: [] });
       }
     }
 
-    async function tracarRotaSegura() {
+    
+      async function recarregarMalhaViaria() {
+        try {
+          const res = await fetch('/api/v1/trechos/geojson?t=' + Date.now());
+          if (!res.ok) return;
+          const dados = await res.json();
+          if (map.getSource('vias-source')) {
+            map.getSource('vias-source').setData(dados);
+          }
+        } catch (e) {
+          console.error("Erro ao recarregar malha viaria:", e);
+        }
+      }
+
+      async function tracarRotaSegura() {
       const st = document.getElementById('rota-status');
       st.innerText = 'Calculando melhor rota sem alagamentos...';
       st.style.color = '#38bdf8';
@@ -209,25 +224,26 @@
         const geojson = data.rota_geojson || { type: 'FeatureCollection', features: [] };
 
         if (map.getSource('rota-source')) {
+            if (map.getLayer('rota-linha')) { try { map.moveLayer('rota-linha'); } catch(e){} }
           map.getSource('rota-source').setData(geojson);
         }
 
-        // Cenário 1: Rota 100% Segura
+        // CenÃ¡rio 1: Rota 100% Segura
         if (data.rota_segura) {
           map.setPaintProperty('rota-linha', 'line-color', '#ff007f');
-          map.setPaintProperty('rota-linha', 'line-dasharray', [1]); // Linha contínua
+          map.setPaintProperty('rota-linha', 'line-dasharray', [1]); // Linha contÃ­nua
           st.style.color = '#22c55e';
-          st.innerText = `Rota traçada: ${data.distancia_km || '0'} km (todos os trechos seguros).`;
+          st.innerText = `Rota traÃ§ada: ${data.distancia_km || '0'} km (todos os trechos seguros).`;
           return;
         }
 
-        // Cenário 2: Sem rota segura, mas existe ponto alternativo alcançável
+        // CenÃ¡rio 2: Sem rota segura, mas existe ponto alternativo alcanÃ§Ã¡vel
         if (data.ponto_alternativo) {
           map.setPaintProperty('rota-linha', 'line-color', '#f97316');
-          map.setPaintProperty('rota-linha', 'line-dasharray', [2, 2]); // Linha tracejada tática
+          map.setPaintProperty('rota-linha', 'line-dasharray', [2, 2]); // Linha tracejada tÃ¡tica
 
           const el = document.createElement('div');
-          el.innerHTML = '📍';
+          el.innerHTML = 'ðŸ“';
           el.style.fontSize = '24px';
           el.style.cursor = 'pointer';
 
@@ -235,22 +251,22 @@
             .setLngLat([data.ponto_alternativo.lon, data.ponto_alternativo.lat])
             .setPopup(new maplibregl.Popup({ offset: 25 }).setHTML(`
               <div style="color:#0f172a; font-size:12px;">
-                <strong>Ponto Seguro Mais Próximo</strong><br>
-                Restam <strong>${data.ponto_alternativo.distancia_ate_destino_m}m</strong> até ao destino (bloqueado por alagamento).
+                <strong>Ponto Seguro Mais PrÃ³ximo</strong><br>
+                Restam <strong>${data.ponto_alternativo.distancia_ate_destino_m}m</strong> atÃ© ao destino (bloqueado por alagamento).
               </div>
             `))
             .addTo(map);
 
           st.style.color = '#f97316';
-          st.innerText = `Atenção: Destino bloqueado! Rota até ao ponto seguro mais próximo (${data.distancia_km} km). Faltam ${data.ponto_alternativo.distancia_ate_destino_m}m a pé.`;
-          dispararToast('Destino Inacessível', 'Desvio gerado para o ponto transitável mais próximo.', 'LARANJA');
+          st.innerText = `AtenÃ§Ã£o: Destino bloqueado! Rota atÃ© ao ponto seguro mais prÃ³ximo (${data.distancia_km} km). Faltam ${data.ponto_alternativo.distancia_ate_destino_m}m a pÃ©.`;
+          dispararToast('Destino InacessÃ­vel', 'Desvio gerado para o ponto transitÃ¡vel mais prÃ³ximo.', 'LARANJA');
           return;
         }
 
-        // Cenário 3: Origem cercada / nenhum ponto alcançável
+        // CenÃ¡rio 3: Origem cercada / nenhum ponto alcanÃ§Ã¡vel
         st.style.color = '#ef4444';
-        st.innerText = data.mensagem || 'Origem cercada por alagamentos. Permaneça em local seguro!';
-        dispararToast('Evacuação Impossibilitada', data.mensagem || 'Origem isolada por vias intransitáveis.', 'VERMELHO');
+        st.innerText = data.mensagem || 'Origem cercada por alagamentos. PermaneÃ§a em local seguro!';
+        dispararToast('EvacuaÃ§Ã£o Impossibilitada', data.mensagem || 'Origem isolada por vias intransitÃ¡veis.', 'VERMELHO');
 
       } catch (err) {
         st.style.color = '#ef4444';
@@ -280,19 +296,19 @@
 
         if (totalAtual > totalOcorrenciasAnterior && totalOcorrenciasAnterior !== 0) {
           const ultimo = alertas[0];
-          dispararToast('Novo Bloqueio Registado', `${ultimo.nome_via || 'Via Crítica'} - Nível ${ultimo.severidade}`, ultimo.severidade);
+          dispararToast('Novo Bloqueio Registrado', `${ultimo.nome_via || 'Via CrÃ­tica'} - NÃ­vel ${ultimo.severidade}`, ultimo.severidade);
         }
         totalOcorrenciasAnterior = totalAtual;
         document.getElementById('contador-alertas').innerText = totalAtual;
 
         if (!alertas || alertas.length === 0) {
-          feed.innerHTML = '<div style="color: #64748b; font-size: 0.8rem;">Todas as vias transitáveis.</div>';
+          feed.innerHTML = '<div style="color: #64748b; font-size: 0.8rem;">Todas as vias transitÃ¡veis.</div>';
           return;
         }
 
         feed.innerHTML = alertas.map(a => `
           <div class="card-alerta" style="border-left-color: ${corPorSeveridade(a.severidade)}" onclick="focarNoTrecho(${a.id_trecho})">
-            <div class="via">${a.nome_via || 'Trecho sem denominação'}</div>
+            <div class="via">${a.nome_via || 'Trecho sem denominaÃ§Ã£o'}</div>
             <div class="info">${a.relato_origem || ''}</div>
             <div class="meta">
               <span>Status: ${a.status}</span>
@@ -375,20 +391,27 @@
 
       map.addLayer({
         id: 'rota-linha',
-        type: 'line',
-        source: 'rota-source',
-        paint: {
-          'line-color': '#ff007f',
-          'line-width': 8,
-          'line-opacity': 0.95
-        }
+          type: 'line',
+          source: 'rota-source',
+          layout: { 'line-join': 'round', 'line-cap': 'round' },
+          paint: {
+            'line-color': '#06b6d4',
+            'line-width': ['interpolate', ['linear'], ['zoom'], 11, 4.0, 14, 7.0, 16, 10.0],
+            'line-opacity': 0.95
+          }
       });
 
       fetch('/api/v1/trechos/geojson')
         .then(r => r.json())
         .then(data => {
           dadosTrechosGeoJSON = data;
-          map.addSource('vias-source', { type: 'geojson', data: data });
+          map.addSource('vias-source', {
+            type: 'geojson',
+            data: data,
+            tolerance: 0,
+            buffer: 256,
+            maxzoom: 24
+          });
 
           map.addLayer({
             id: 'vias-base',
@@ -396,13 +419,14 @@
             source: 'vias-source',
             paint: {
               'line-color': [
-                'step',
-                ['coalesce', ['get', 'ivi'], 0],
-                '#22c55e',
-                40, '#eab308',
-                60, '#f97316',
-                70, '#ef4444'
-              ],
+                  'match',
+                  ['coalesce', ['get', 'severidade'], 'VERDE'],
+                  'VERMELHO', '#ef4444',
+                  'LARANJA', '#f97316',
+                  'AMARELO', '#eab308',
+                  'VERDE', '#22c55e',
+                  '#22c55e'
+                ],
               'line-width': ['interpolate', ['linear'], ['zoom'], 11, 1.2, 14, 2.5, 16, 4.0],
               'line-opacity': 0.85
             }
@@ -412,9 +436,9 @@
             id: 'vias-bloqueadas',
             type: 'line',
             source: 'vias-source',
-            filter: ['!=', ['get', 'status_operacional'], 'TRANSITAVEL'],
+            filter: ['==', ['get', 'status_operacional'], 'INTRANSITAVEL'],
             paint: {
-              'line-color': '#d946ef',
+              'line-color': '#ef4444',
               'line-width': ['interpolate', ['linear'], ['zoom'], 11, 3.5, 14, 6.0, 16, 9.0],
               'line-opacity': 0.95
             }
@@ -440,20 +464,20 @@
     });
   </script>
 
-  <!-- Modal de Análise Temporal -->
+  <!-- Modal de AnÃ¡lise Temporal -->
   <div id="modal-graficos" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:10000; align-items:center; justify-content:center;">
     <div style="background:#111827; border:1px solid #1f2937; border-radius:10px; width:680px; max-width:92%; padding:20px; box-shadow:0 20px 25px -5px rgba(0,0,0,0.5);">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-        <h2 style="font-size:1.1rem; color:#38bdf8; font-weight:800;">Evolução Temporal & Distribuição Tática</h2>
+        <h2 style="font-size:1.1rem; color:#38bdf8; font-weight:800;">EvoluÃ§Ã£o Temporal & DistribuiÃ§Ã£o TÃ¡tica</h2>
         <button onclick="fecharModalGraficos()" style="background:transparent; border:none; color:#94a3b8; font-size:1.4rem; cursor:pointer;">&times;</button>
       </div>
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
         <div style="background:#1e293b; padding:12px; border-radius:8px;">
-          <h3 style="font-size:0.8rem; color:#94a3b8; margin-bottom:10px; text-align:center;">Severidade das Ocorrências</h3>
+          <h3 style="font-size:0.8rem; color:#94a3b8; margin-bottom:10px; text-align:center;">Severidade das OcorrÃªncias</h3>
           <canvas id="chart-severidade" height="200"></canvas>
         </div>
         <div style="background:#1e293b; padding:12px; border-radius:8px;">
-          <h3 style="font-size:0.8rem; color:#94a3b8; margin-bottom:10px; text-align:center;">Incidentes por Horário</h3>
+          <h3 style="font-size:0.8rem; color:#94a3b8; margin-bottom:10px; text-align:center;">Incidentes por HorÃ¡rio</h3>
           <canvas id="chart-tempo" height="200"></canvas>
         </div>
       </div>
@@ -526,5 +550,76 @@
       document.getElementById('modal-graficos').style.display = 'none';
     }
   </script>
+  <div id="painel-hidrologico-cge" style="position: absolute; top: 16px; right: 16px; z-index: 1000; background: #0f172a; color: #f8fafc; padding: 14px 18px; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.6); border: 1px solid #334155; width: 280px; font-family: inherit;">
+    <div style="font-size: 13px; font-weight: 700; margin-bottom: 8px; color: #38bdf8; display: flex; align-items: center; justify-content: space-between;">
+      <span>TELEMETRIA & CHUVA</span>
+      <span id="badge-chuva-mm" style="background: #1e293b; color: #38bdf8; padding: 2px 8px; border-radius: 4px; font-size: 11px;">0 mm</span>
+    </div>
+    
+    <button id="btn-sync-cge-auto" type="button" style="width: 100%; padding: 7px 10px; background: #0284c7; color: #ffffff; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; margin-bottom: 6px;">
+      Sincronizar CGE (Itaquera)
+    </button>
+    <div id="status-cge-tempo" style="font-size: 10px; color: #94a3b8; margin-bottom: 10px; min-height: 14px;">Aguardando sincronizacao...</div>
+
+    <div style="border-top: 1px solid #1e293b; padding-top: 8px;">
+      <div style="display: flex; justify-content: space-between; font-size: 11px; color: #cbd5e1; margin-bottom: 4px;">
+        <span>Simulacao Manual:</span>
+        <span id="valor-slider-chuva" style="font-weight: 600;">0 mm</span>
+      </div>
+      <input type="range" id="slider-chuva-sim" min="0" max="100" value="0" step="5" style="width: 100%; accent-color: #38bdf8; cursor: pointer;">
+    </div>
+  </div>
+
+  <script>
+    const sliderChuva = document.getElementById('slider-chuva-sim');
+    const valorChuvaLabel = document.getElementById('valor-slider-chuva');
+    const badgeChuva = document.getElementById('badge-chuva-mm');
+    const btnCge = document.getElementById('btn-sync-cge-auto');
+    const statusCge = document.getElementById('status-cge-tempo');
+
+    let debounceChuva;
+    sliderChuva.addEventListener('input', (e) => {
+      const mm = e.target.value;
+      valorChuvaLabel.textContent = mm + ' mm';
+      badgeChuva.textContent = mm + ' mm';
+
+      clearTimeout(debounceChuva);
+      debounceChuva = setTimeout(async () => {
+        try {
+          await fetch('/api/v1/monitoramento/simular-chuva?acumulado_mm=' + mm, { method: 'POST' });
+            await recarregarMalhaViaria();
+            if (typeof tracarRotaSegura === 'function' && pontoOrigem && pontoDestino) {
+              await tracarRotaSegura();
+            }
+          } catch (err) {
+          console.error(err);
+        }
+      }, 350);
+    });
+
+    btnCge.addEventListener('click', async () => {
+      btnCge.disabled = true;
+      btnCge.textContent = 'Consultando CGE...';
+      try {
+        const res = await fetch('/api/v1/monitoramento/sincronizar-cge', { method: 'POST' });
+        const data = await res.json();
+        const mm = data.telemetria ? data.telemetria.acumulado_mm : 0;
+        sliderChuva.value = mm;
+        valorChuvaLabel.textContent = mm + ' mm';
+        badgeChuva.textContent = mm + ' mm';
+        statusCge.textContent = 'Posto Itaquera: ' + mm + ' mm (' + new Date().toLocaleTimeString() + ')';
+        if (typeof sincronizar === 'function') await recarregarMalhaViaria(); await sincronizar();
+        if (typeof tracarRotaSegura === 'function') await tracarRotaSegura();
+      } catch (err) {
+        statusCge.textContent = 'Erro ao conectar ao CGE';
+      } finally {
+        btnCge.disabled = false;
+        btnCge.textContent = 'Sincronizar CGE (Itaquera)';
+      }
+    });
+  </script>
 </body>
 </html>
+
+
+

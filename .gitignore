@@ -6,3 +6,5 @@ dados/processados/
 backup_banco_itaquera.sql
 *.sql
 .env
+
+cache/

@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from pathlib import Path
 from app.database import init_db_pool, close_db_pool
-from app.routers import estatisticas, trechos, ocorrencias, rotas, simulacao, relatorios
+from app.routers import estatisticas, trechos, ocorrencias, rotas, simulacao, relatorios, monitoramento
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -33,6 +33,7 @@ app.include_router(ocorrencias.router)
 app.include_router(rotas.router)
 app.include_router(simulacao.router)
 app.include_router(relatorios.router)
+app.include_router(monitoramento.router)
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 static_dir = BASE_DIR / "static"
@@ -47,3 +48,7 @@ async def root():
 @app.get("/health", tags=["Infraestrutura"])
 async def health_check():
     return {"status": "operacional"}
+
+
+
+
