@@ -10,6 +10,12 @@ class Settings(BaseSettings):
     DB_POOL_MIN_SIZE: int = 4
     DB_POOL_MAX_SIZE: int = 20
 
+    API_KEYS: str = ""
+
+    @property
+    def chaves_validas(self) -> list[str]:
+        return [c.strip() for c in self.API_KEYS.split(",") if c.strip()]
+
     @property
     def database_url(self) -> str:
         return f"postgresql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"

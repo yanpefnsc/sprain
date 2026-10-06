@@ -5,6 +5,7 @@ import unicodedata
 from app.schemas import AlertaRapidoCreate, OcorrenciaTextoCreate
 from app.nlp import extrair_dados_ocorrencia
 from app.database import get_connection
+from app.seguranca import exigir_api_key
 
 router = APIRouter(prefix="/api/v1/ocorrencias", tags=["Ocorrências"])
 
@@ -13,7 +14,7 @@ def normalizar_texto(texto: str) -> str:
     sem_acento = "".join([c for c in nfkd if not unicodedata.combining(c)])
     return re.sub(r'[^a-zA-Z0-9\s]', ' ', sem_acento).lower().strip()
 
-@router.post("/alerta-rapido")
+@router.post("/alerta-rapido", dependencies=[Depends(exigir_api_key)])
 async def registrar_alerta_rapido(dados: AlertaRapidoCreate, conn: asyncpg.Connection = Depends(get_connection)):
     status_map = {
         "VERDE": "TRANSITAVEL",
@@ -90,7 +91,7 @@ async def listar_ocorrencias_ativas(conn: asyncpg.Connection = Depends(get_conne
     rows = await conn.fetch(query)
     return [dict(row) for row in rows]
 
-@router.post("/resetar-todas")
+@router.post("/resetar-todas", dependencies=[Depends(exigir_api_key)])
 async def resetar_todas_ocorrencias(conn: asyncpg.Connection = Depends(get_connection)):
     query = """
     UPDATE estado_operacional_trechos
@@ -104,7 +105,7 @@ async def resetar_todas_ocorrencias(conn: asyncpg.Connection = Depends(get_conne
     rows = await conn.fetch(query)
     return {"sucesso": True, "trechos_liberados": len(rows)}
 
-@router.post("/processar-texto")
+@router.post("/processar-texto", dependencies=[Depends(exigir_api_key)])
 async def processar_texto(dados: OcorrenciaTextoCreate, conn: asyncpg.Connection = Depends(get_connection)):
     extraido = extrair_dados_ocorrencia(dados.texto)
 

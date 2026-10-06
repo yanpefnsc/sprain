@@ -27,6 +27,7 @@ services:
       DB_USER: enchentes
       DB_PASSWORD: enchentes
       DB_NAME: enchentes
+      API_KEYS: ${API_KEYS}
     ports:
       - "8000:8000"
     depends_on:

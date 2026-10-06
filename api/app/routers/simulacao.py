@@ -1,14 +1,15 @@
-﻿from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
 import asyncpg
 from app.database import get_connection
+from app.seguranca import exigir_api_key
 
 router = APIRouter(prefix="/api/v1/simulacao", tags=["Simulação de Chuva"])
 
 class SimulacaoRequest(BaseModel):
     milimetros_chuva: float = Field(..., ge=5.0, le=200.0, description="Volume acumulado em mm")
 
-@router.post("/disparar")
+@router.post("/disparar", dependencies=[Depends(exigir_api_key)])
 async def disparar_simulacao(dados: SimulacaoRequest, conn: asyncpg.Connection = Depends(get_connection)):
     limiar_calculado = float(max(35.0, 85.0 - (dados.milimetros_chuva * 0.6)))
     relato = f"Simulacao hidrologica: precipitacao projetada de {dados.milimetros_chuva} mm"

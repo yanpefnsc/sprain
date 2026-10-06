@@ -5,3 +5,4 @@ dados/processados/
 *.zip
 backup_banco_itaquera.sql
 *.sql
+.env
