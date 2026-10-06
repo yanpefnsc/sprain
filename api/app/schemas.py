@@ -1,4 +1,4 @@
-﻿from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field
 from typing import Optional, Dict
 
 class AlertaRapidoCreate(BaseModel):
@@ -14,6 +14,9 @@ class OcorrenciaTextoCreate(BaseModel):
 
 class ResumoEstatisticas(BaseModel):
     total_trechos: int
-    trechos_criticos: int
+    criticos: int
+    altos: int
+    medios: int
+    baixos: int
+    ivi_medio: float
     trechos_interditados: int
-    distribuicao_severidade: Dict[str, int]
