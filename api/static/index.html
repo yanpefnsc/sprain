@@ -315,9 +315,32 @@
       }
     }
 
+    function chaveApi() {
+      let chave = sessionStorage.getItem('sprain_api_key');
+      if (!chave) {
+        chave = prompt('Chave de acesso do operador:');
+        if (chave) sessionStorage.setItem('sprain_api_key', chave.trim());
+      }
+      return chave;
+    }
+
+    async function chamarApi(url, opcoes = {}) {
+      const chave = chaveApi();
+      if (!chave) return null;
+      const headers = { ...(opcoes.headers || {}), 'X-API-Key': chave };
+      const resp = await fetch(url, { ...opcoes, headers });
+      if (resp.status === 401) {
+        sessionStorage.removeItem('sprain_api_key');
+        alert('Chave invalida. Tente de novo.');
+      } else if (resp.status === 404 || resp.status === 422) {
+        const erro = await resp.json().catch(() => ({}));
+        alert(erro.detail || 'Nao foi possivel processar o pedido.');
+      }
+      return resp;
+    }
     async function executarSimulacao() {
       const mm = parseFloat(document.getElementById('slider-chuva').value);
-      await fetch('/api/v1/simulacao/disparar', {
+      await chamarApi('/api/v1/simulacao/disparar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ milimetros_chuva: mm })
@@ -326,7 +349,7 @@
     }
 
     async function resetarVias() {
-      await fetch('/api/v1/ocorrencias/resetar-todas', { method: 'POST' });
+      await chamarApi('/api/v1/ocorrencias/resetar-todas', { method: 'POST' });
       limparRota();
       sincronizar();
     }
@@ -335,12 +358,12 @@
       const campo = document.getElementById('txt-ocorrencia');
       const texto = campo.value.trim();
       if (!texto) return;
-      await fetch('/api/v1/ocorrencias/processar-texto', {
+      const resp = await chamarApi('/api/v1/ocorrencias/processar-texto', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ texto })
       });
-      campo.value = '';
+      if (resp && resp.ok) campo.value = '';
       sincronizar();
     }
 
