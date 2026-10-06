@@ -1,4 +1,4 @@
-﻿from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends
 import asyncpg
 import re
 import unicodedata
@@ -106,30 +106,31 @@ async def resetar_todas_ocorrencias(conn: asyncpg.Connection = Depends(get_conne
 
 @router.post("/processar-texto")
 async def processar_texto(dados: OcorrenciaTextoCreate, conn: asyncpg.Connection = Depends(get_connection)):
-    try:
-        extraido = extrair_dados_ocorrencia(dados.texto)
-    except Exception:
-        extraido = {"via": "Jacu-Pessego", "status": "INTRANSITAVEL", "severidade": "VERMELHO"}
+    extraido = extrair_dados_ocorrencia(dados.texto)
 
-    bruto_via = extraido.get("via") or "Jacu-Pessego"
-    nome_limpo = re.sub(r'(?i)\b(intransit[aá]vel|alagament[oa]|alagada|bloqueada|interditada)\b', '', bruto_via).strip()
-    if not nome_limpo:
-        nome_limpo = bruto_via
+    if not extraido["via"]:
+        raise HTTPException(
+            status_code=422,
+            detail="Nao consegui identificar a via no texto. Informe o nome da rua ou use o alerta rapido com coordenadas."
+        )
+    if not extraido["status"]:
+        raise HTTPException(
+            status_code=422,
+            detail="Nao consegui identificar a situacao da via (alagada, bloqueada, liberada...)."
+        )
 
-    palavras_chave = [w for w in normalizar_texto(nome_limpo).split() if len(w) > 3 and w not in ('avenida', 'rua', 'alameda', 'estrada')]
+    ignorar = ("avenida", "rua", "alameda", "estrada", "rodovia")
+    palavras_chave = [w for w in normalizar_texto(extraido["via"]).split() if len(w) > 3 and w not in ignorar]
     if not palavras_chave:
-        palavras_chave = [normalizar_texto(nome_limpo)]
+        raise HTTPException(status_code=422, detail="Nome da via curto demais para buscar com seguranca.")
 
-    status_op = str(extraido.get("status") or "INTRANSITAVEL").upper()
-    severidade = str(extraido.get("severidade") or "VERMELHO").upper()
+    padroes = [f"%{p}%" for p in palavras_chave]
 
-    filtro_clausula = " OR ".join([f"translate(lower(name), 'áàâãéêíóôõúç', 'aaaaeeiooouc') LIKE '%{p}%'" for p in palavras_chave])
-
-    query = f"""
+    query = """
     WITH vias_encontradas AS (
-        SELECT id_trecho, name
+        SELECT id_trecho
         FROM trechos_osm
-        WHERE {filtro_clausula}
+        WHERE translate(lower(name), '\u00e1\u00e0\u00e2\u00e3\u00e9\u00ea\u00ed\u00f3\u00f4\u00f5\u00fa\u00e7', 'aaaaeeiooouc') LIKE ALL($4::text[])
         LIMIT 25
     )
     INSERT INTO estado_operacional_trechos (id_trecho, status, severidade, relato_origem, registrado_em)
@@ -143,18 +144,16 @@ async def processar_texto(dados: OcorrenciaTextoCreate, conn: asyncpg.Connection
     RETURNING id_trecho;
     """
 
-    rows = await conn.fetch(
-        query,
-        status_op,
-        severidade,
-        dados.texto
-    )
+    rows = await conn.fetch(query, extraido["status"], extraido["severidade"], dados.texto, padroes)
+
+    if not rows:
+        raise HTTPException(status_code=404, detail=f"Nenhuma via encontrada para '{extraido['via']}'.")
 
     return {
         "sucesso": True,
         "trechos_atualizados": len(rows),
-        "termo_buscado": nome_limpo,
+        "termo_buscado": extraido["via"],
         "palavras_chave": palavras_chave,
-        "status_definido": status_op,
-        "severidade": severidade
+        "status_definido": extraido["status"],
+        "severidade": extraido["severidade"]
     }
