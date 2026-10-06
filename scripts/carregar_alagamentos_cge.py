@@ -1,4 +1,5 @@
-﻿import os
+import os
+import sys
 import requests
 import pandas as pd
 import geopandas as gpd
@@ -13,26 +14,9 @@ def main():
     os.makedirs(pasta_cge, exist_ok=True)
     caminho_csv = os.path.join(pasta_cge, "pontos_alagamento_cge.csv")
 
-    print("1. Obtendo historico de alagamentos CGE-SP...")
-    url_dados = "https://raw.githubusercontent.com/datasets-br/pontos-alagamento-sp/master/data/alagamentos_cge_historico.csv"
-
-    if not os.path.exists(caminho_csv):
-        try:
-            resp = requests.get(url_dados, timeout=30)
-            if resp.status_code == 200:
-                with open(caminho_csv, "wb") as f:
-                    f.write(resp.content)
-                print("   -> Ficheiro CGE descarregado!")
-        except Exception:
-            pass
-
+    print("1. Lendo historico de alagamentos CGE-SP...")
     if not os.path.exists(caminho_csv) or os.path.getsize(caminho_csv) == 0:
-        dados_amostra = [
-            {"data": "2023-01-15 17:30:00", "local": "AV JACU PESSEGO", "latitude": -23.5412, "longitude": -46.4485, "tipo": "Intransitavel"},
-            {"data": "2023-02-10 18:15:00", "local": "RUA ITAGUACU", "latitude": -23.5350, "longitude": -46.4560, "tipo": "Transitavel"},
-            {"data": "2024-01-20 16:00:00", "local": "AV ITAQUERA", "latitude": -23.5420, "longitude": -46.4680, "tipo": "Intransitavel"}
-        ]
-        pd.DataFrame(dados_amostra).to_csv(caminho_csv, index=False)
+        sys.exit(f"Sem dados do CGE em {caminho_csv}. Coloque o CSV real do historico (com colunas de latitude e longitude) nesse caminho e rode de novo.")
 
     df = pd.read_csv(caminho_csv)
     col_lat = [c for c in df.columns if "lat" in c.lower()][0]
