@@ -1,3 +1,4 @@
+from app.seguranca import require_role
 from fastapi import APIRouter, HTTPException, Depends, Query
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
@@ -77,7 +78,7 @@ async def calcular_rota(dados: RotaRequest, conn: asyncpg.Connection = Depends(g
         "desvio_necessario": rota_padrao["distancia_km"] != rota_resiliente["distancia_km"]
     }
 
-@router.get("/intermunicipal")
+@router.get("/intermunicipal", dependencies=[Depends(require_role(["ADMIN", "OPERATOR", "VIEWER"]))])
 async def calcular_rota_intermunicipal(
     origem: str = Query("Araraquara", description="Cidade de origem do transporte"),
     destino: str = Query("Sao Paulo", description="Cidade de destino final"),
