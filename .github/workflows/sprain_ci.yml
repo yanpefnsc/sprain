@@ -17,12 +17,12 @@ jobs:
       - name: Build and Start Containers
         run: |
           docker compose up -d --build
-          sleep 5
+          sleep 10
 
       - name: Wait for Postgres & Bootstrap Minimal Schema
         run: |
-          docker exec sprain_db sh -c 'until pg_isready -U postgres -d enchentes; do sleep 2; done'
-          docker exec -i sprain_db psql -U postgres -d enchentes -c "
+          docker exec sprain_db sh -c 'until pg_isready; do sleep 2; done'
+          docker exec -i sprain_db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' << 'EOF'
             CREATE EXTENSION IF NOT EXISTS postgis;
             CREATE EXTENSION IF NOT EXISTS pgrouting;
             CREATE TABLE IF NOT EXISTS trechos_osm (
@@ -37,7 +37,7 @@ jobs:
             INSERT INTO trechos_osm (source, target, cost, reverse_cost, nome_via)
             VALUES (1, 2, 1.0, 1.0, 'Avenida Radial Leste')
             ON CONFLICT DO NOTHING;
-          "
+          EOF
 
       - name: Run Full Test Suite Inside Container
         run: |
