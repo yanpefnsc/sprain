@@ -189,5 +189,109 @@
             }
         }
     </script>
+
+<div id="decision-modal" style="display:none; position:fixed; top:24px; right:24px; width:440px; background:#111827; border:1px solid #374151; border-radius:10px; padding:18px; color:#f3f4f6; z-index:99999; box-shadow:0 20px 30px rgba(0,0,0,0.6); font-family:system-ui, -apple-system, sans-serif;">
+  <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #374151; padding-bottom:10px; margin-bottom:12px;">
+    <div>
+      <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.05em; color:#9ca3af;">Auditoria de Resiliência</div>
+      <h3 style="margin:2px 0 0 0; font-size:16px; font-weight:700; color:#38bdf8;" id="modal-op-title">Operação</h3>
+    </div>
+    <button onclick="document.getElementById('decision-modal').style.display='none'" style="background:transparent; border:none; color:#9ca3af; font-size:22px; cursor:pointer; line-height:1;">&times;</button>
+  </div>
+  <div style="font-size:13px; display:flex; flex-direction:column; gap:10px;">
+    <div>
+      <span style="color:#9ca3af;">Ação:</span>
+      <span id="modal-acao" style="margin-left:6px; padding:3px 8px; border-radius:4px; font-weight:700; font-size:12px;"></span>
+      <span id="modal-confianca" style="margin-left:8px; font-size:11px; color:#9ca3af;"></span>
+    </div>
+    <div style="background:#1f2937; border-left:3px solid #38bdf8; padding:8px 10px; border-radius:4px; color:#e5e7eb; font-size:12px;" id="modal-justificativa"></div>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; background:#1f2937; padding:10px; border-radius:6px; font-size:12px;">
+      <div><span style="color:#9ca3af;">Delta Percurso:</span> <strong id="modal-delta-km" style="color:#f3f4f6;"></strong></div>
+      <div><span style="color:#9ca3af;">Delta Tempo:</span> <strong id="modal-delta-tempo" style="color:#f3f4f6;"></strong></div>
+      <div><span style="color:#9ca3af;">Custo Desvio:</span> <strong id="modal-custo" style="color:#f59e0b;"></strong></div>
+      <div><span style="color:#9ca3af;">Dano Evitado:</span> <strong id="modal-prejuizo" style="color:#10b981;"></strong></div>
+    </div>
+    <div>
+      <div style="font-weight:600; font-size:12px; margin-bottom:6px; color:#d1d5db;">Pontos Críticos que Forçaram Desvio:</div>
+      <div id="modal-trechos-lista" style="max-height:130px; overflow-y:auto; background:#030712; border:1px solid #374151; border-radius:6px; padding:6px; display:flex; flex-direction:column; gap:4px;"></div>
+    </div>
+  </div>
+</div>
+<script>
+async function abrirExplicacaoDecisao(idOperacao) {
+  try {
+    const res = await fetch(`/api/v1/logistica/operacoes/${idOperacao}/explicacao`);
+    if (!res.ok) return;
+    const data = await res.json();
+    document.getElementById('modal-op-title').innerText = `${data.id_operacao} | ${data.placa} (${data.modelo})`;
+    const acaoEl = document.getElementById('modal-acao');
+    acaoEl.innerText = data.acao_recomendada;
+    if (data.acao_recomendada === 'ALTERAR_ROTA') {
+      acaoEl.style.background = '#dc2626';
+      acaoEl.style.color = '#ffffff';
+    } else {
+      acaoEl.style.background = '#059669';
+      acaoEl.style.color = '#ffffff';
+    }
+    document.getElementById('modal-confianca').innerText = `Confiança: ${(data.confianca * 100).toFixed(0)}%`;
+    document.getElementById('modal-justificativa').innerText = data.justificativa;
+    document.getElementById('modal-delta-km').innerText = data.metricas.delta_km > 0 ? `+${data.metricas.delta_km} km` : `${data.metricas.delta_km} km`;
+    document.getElementById('modal-delta-tempo').innerText = data.metricas.delta_tempo_min > 0 ? `+${data.metricas.delta_tempo_min} min` : `${data.metricas.delta_tempo_min} min`;
+    document.getElementById('modal-custo').innerText = `R$ ${data.metricas.custo_desvio_brl.toFixed(2)}`;
+    document.getElementById('modal-prejuizo').innerText = `R$ ${data.metricas.prejuizo_evitado_brl.toFixed(2)}`;
+    const trechosDiv = document.getElementById('modal-trechos-lista');
+    trechosDiv.innerHTML = '';
+    if (!data.pontos_bloqueio || data.pontos_bloqueio.length === 0) {
+      trechosDiv.innerHTML = '<div style="color:#9ca3af; font-size:11px; padding:4px;">Nenhum trecho de risco interceptado na malha.</div>';
+    } else {
+      data.pontos_bloqueio.forEach(t => {
+        const item = document.createElement('div');
+        item.style.padding = '4px';
+        item.style.fontSize = '11px';
+        item.style.borderBottom = '1px solid #1f2937';
+        item.innerHTML = `<span style="color:#ef4444; font-weight:700;">[${t.status}]</span> ${t.nome_via} (${t.extensao_metros}m) - Score: ${t.score_risco}`;
+        trechosDiv.appendChild(item);
+      });
+    }
+    document.getElementById('decision-modal').style.display = 'block';
+  } catch (err) {
+    console.error(err);
+  }
+}
+window.abrirExplicacaoDecisao = abrirExplicacaoDecisao;
+</script>
+<script>
+async function dispararWebhookOperacao(idOperacao) {
+    const btn = document.getElementById(`btn-webhook-${idOperacao}`);
+    if (btn) {
+        btn.disabled = true;
+        btn.innerText = "Disparando...";
+    }
+    try {
+        const res = await fetch("/api/v1/logistica/alertas/disparar-webhook", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                webhook_url: "https://httpbin.org/post",
+                id_operacao: idOperacao
+            })
+        });
+        const data = await res.json();
+        if (data.sucesso) {
+            alert(`✅ Alerta tático para a operação ${idOperacao} disparado com sucesso via Webhook!`);
+        } else {
+            alert(`⚠️ Resposta do envio: ${data.status_envio}`);
+        }
+    } catch (err) {
+        alert("❌ Falha na conexão ao disparar alerta.");
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = "🚨 Notificar Frota (Webhook)";
+        }
+    }
+}
+</script>
+
 </body>
 </html>
