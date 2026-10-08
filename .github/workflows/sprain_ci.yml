@@ -19,25 +19,11 @@ jobs:
           docker compose up -d --build
           sleep 10
 
-      - name: Wait for Postgres & Bootstrap Minimal Schema
+      - name: Wait for Postgres & Load Schema
         run: |
-          docker exec sprain_db sh -c 'until pg_isready; do sleep 2; done'
-          docker exec -i sprain_db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' << 'EOF'
-            CREATE EXTENSION IF NOT EXISTS postgis;
-            CREATE EXTENSION IF NOT EXISTS pgrouting;
-            CREATE TABLE IF NOT EXISTS trechos_osm (
-              id SERIAL PRIMARY KEY,
-              source INT DEFAULT 1,
-              target INT DEFAULT 2,
-              cost DOUBLE PRECISION DEFAULT 1.0,
-              reverse_cost DOUBLE PRECISION DEFAULT 1.0,
-              nome_via TEXT DEFAULT 'Avenida Radial Leste',
-              geom geometry(Geometry, 4326)
-            );
-            INSERT INTO trechos_osm (source, target, cost, reverse_cost, nome_via)
-            VALUES (1, 2, 1.0, 1.0, 'Avenida Radial Leste')
-            ON CONFLICT DO NOTHING;
-          EOF
+          docker exec sprain_db sh -c 'until pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"; do sleep 2; done'
+          docker cp init_ci.sql sprain_db:/tmp/init_ci.sql
+          docker exec -i sprain_db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f /tmp/init_ci.sql || true'
 
       - name: Run Full Test Suite Inside Container
         run: |
