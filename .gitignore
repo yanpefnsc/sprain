@@ -8,3 +8,6 @@ backup_banco_itaquera.sql
 .env
 
 cache/
+
+contexto_proximo_chat.txt
+diagnostico_projeto.txt
