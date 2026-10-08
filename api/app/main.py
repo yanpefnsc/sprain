@@ -1,18 +1,54 @@
-from app.services.security_headers import SecurityHeadersMiddleware
-from app.services.observabilidade import ObservabilidadeMiddleware
+﻿import sys
+import asyncio
+from pathlib import Path
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
-from pathlib import Path
+
+from app.services.security_headers import SecurityHeadersMiddleware
+from app.services.observabilidade import ObservabilidadeMiddleware
 from app.database import init_db_pool, close_db_pool
-from app.routers import estatisticas, trechos, ocorrencias, rotas, simulacao, relatorios, monitoramento, logistica, health
+from app.routers import (
+    estatisticas,
+    trechos,
+    ocorrencias,
+    rotas,
+    simulacao,
+    relatorios,
+    monitoramento,
+    logistica,
+    health
+)
+
+async def agendador_telemetria_corredor():
+    while True:
+        try:
+            await asyncio.sleep(1800)
+            proc = await asyncio.create_subprocess_exec(
+                sys.executable, "/app/scripts/sincronizar_clima_corredor.py",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            await proc.communicate()
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            pass
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db_pool()
-    yield
-    await close_db_pool()
+    task_clima = asyncio.create_task(agendador_telemetria_corredor())
+    try:
+        yield
+    finally:
+        task_clima.cancel()
+        try:
+            await task_clima
+        except asyncio.CancelledError:
+            pass
+        await close_db_pool()
 
 tags_metadata = [
     {
@@ -39,7 +75,7 @@ tags_metadata = [
 
 app = FastAPI(
     title="SPRain B2B - Climate Resilience & Logistics Intelligence API",
-    description="Plataforma corporativa de inteligencia climatica, predicao de intransitabilidade urbana e roteamento dinamico de frotas.",
+    description="Plataforma corporativa de inteligencia climatica, predicao de intransitabilidade urbana e roteamento dinamicode frotas.",
     version="1.1.0",
     lifespan=lifespan,
     openapi_tags=tags_metadata,
