@@ -1,4 +1,4 @@
-﻿import time
+import time
 import json
 import asyncpg
 from typing import Dict, Any, Optional, Tuple
@@ -74,7 +74,13 @@ class RoutingEngine:
         elif profile == "SHORTEST":
             cost_sql = "t.length"
         else:
-            cost_sql = "t.length / NULLIF(COALESCE(t.speed_kph, 40.0), 0.0)"
+            cost_sql = """
+            t.length / CASE 
+                WHEN t.highway IN (''primary'', ''trunk'') THEN 40.0
+                WHEN t.highway IN (''secondary'', ''tertiary'') THEN 30.0
+                ELSE 20.0
+            END
+            """
 
         pgr_query = f"""
         SELECT 
@@ -84,10 +90,10 @@ class RoutingEngine:
             r.cost, 
             t.id_trecho, 
             t.name, 
-            t.length,
+            t.length, 
             ST_AsGeoJSON(ST_Transform(t.geom, 4326)) AS geojson
         FROM pgr_dijkstra(
-            'SELECT t.id_trecho AS id, t.source::bigint, t.target::bigint, ({cost_sql})::float AS cost, ({cost_sql})::float AS reverse_cost FROM trechos_osm t',
+            'SELECT t.id_trecho AS id, t.source::bigint, t.target::bigint, ({cost_sql})::float AS cost, ({cost_sql})::float AS reverse_cost FROM trechos_osm t WHERE t.source IS NOT NULL AND t.target IS NOT NULL',
             $1::bigint, $2::bigint, false
         ) r
         LEFT JOIN trechos_osm t ON t.id_trecho = r.edge

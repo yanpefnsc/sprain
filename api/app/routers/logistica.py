@@ -664,3 +664,178 @@ async def testar_webhook_tenant(payload: WebhookTestRequest, tenant_id: str = "d
     if not resultado["sucesso"]:
         raise HTTPException(status_code=400, detail=resultado["motivo"])
     return resultado
+
+from app.schemas_economic import DecisaoEconomicaRequest
+from app.services.economic_engine import EconomicDecisionEngine
+
+@router.post("/decisao-economica", dependencies=[Depends(aplicar_rate_limit)])
+async def tomar_decisao_economica(dados: DecisaoEconomicaRequest, conn: asyncpg.Connection = Depends(get_connection)):
+    rota_direta = await RoutingEngine.compute_route(
+        conn, dados.origem_lon, dados.origem_lat, dados.destino_lon, dados.destino_lat, profile="FASTEST", rain_mm=0.0
+    )
+    rota_segura = await RoutingEngine.compute_route(
+        conn, dados.origem_lon, dados.origem_lat, dados.destino_lon, dados.destino_lat, profile="SAFEST", rain_mm=dados.precipitacao_mm
+    )
+    
+    if not rota_direta or not rota_segura:
+        raise HTTPException(status_code=400, detail="Nao foi possivel rotear os pontos informados sobre a malha viaria.")
+        
+    fator_chuva = min(1.0, dados.precipitacao_mm / 100.0)
+    prob_atraso = round(min(0.95, 0.20 + (fator_chuva * 0.70)), 2)
+    prob_bloqueio = round(min(0.90, 0.10 + (fator_chuva * 0.80)), 2)
+    
+    rota_direta_info = {
+        "distancia_km": rota_direta["distancia_km"],
+        "tempo_min": rota_direta["tempo_min"],
+        "probabilidade_atraso": prob_atraso,
+        "probabilidade_bloqueio": prob_bloqueio
+    }
+    
+    rota_segura_info = {
+        "distancia_km": rota_segura["distancia_km"],
+        "tempo_min": rota_segura["tempo_min"],
+        "probabilidade_atraso": 0.08,
+        "probabilidade_bloqueio": 0.01
+    }
+    
+    resultado = EconomicDecisionEngine.compare_and_recommend(
+        rota_direta=rota_direta_info,
+        rota_segura=rota_segura_info,
+        parametros=dados.parametros.model_dump()
+    )
+    
+    return {
+        "tenant_id": dados.tenant_id,
+        "chuva_simulada_mm": dados.precipitacao_mm,
+        "decisao": resultado,
+        "rotas_geometria": {
+            "rota_direta": rota_direta["geojson"],
+            "rota_alternativa": rota_segura["geojson"]
+        }
+    }
+
+@router.get("/central-frota", dependencies=[Depends(aplicar_rate_limit)])
+async def obter_painel_central_frota(tenant_id: str = Depends(resolve_tenant), precipitacao_referencia_mm: float = 60.0, conn: asyncpg.Connection = Depends(get_connection)):
+    query = """
+        SELECT 
+            v.id_veiculo,
+            v.placa,
+            v.modelo,
+            v.tipo_veiculo,
+            COALESCE(v.lat_atual, -23.542) AS lat_atual,
+            COALESCE(v.lon_atual, -46.468) AS lon_atual,
+            o.id_operacao,
+            o.origem_nome,
+            o.destino_nome,
+            o.distancia_planejada_km,
+            o.tempo_planejado_min,
+            o.status AS status_operacao,
+            o.janela_fim,
+            COUNT(ort.id_trecho) AS total_trechos_rota,
+            COUNT(ort.id_trecho) FILTER (WHERE t.classe_risco IN ('Alto', 'Critico')) AS trechos_risco
+        FROM veiculos v
+        LEFT JOIN operacoes o ON o.id_veiculo = v.id_veiculo AND o.tenant_id = v.tenant_id AND o.status IN ('PLANNED', 'IN_TRANSIT')
+        LEFT JOIN operacao_rotas_trechos ort ON ort.id_operacao = o.id_operacao
+        LEFT JOIN trechos_osm t ON t.id_trecho = ort.id_trecho
+        WHERE v.tenant_id = $1
+        GROUP BY v.id_veiculo, v.placa, v.modelo, v.tipo_veiculo, v.lat_atual, v.lon_atual, o.id_operacao, o.origem_nome, o.destino_nome, o.distancia_planejada_km, o.tempo_planejado_min, o.status, o.janela_fim
+        ORDER BY v.id_veiculo;
+    """
+    rows = await conn.fetch(query, tenant_id)
+    
+    frota = []
+    total_veiculos = len(rows)
+    veiculos_em_risco = 0
+    impacto_financeiro_evitavel_total = 0.0
+
+    for r in rows:
+        tem_operacao = r["id_operacao"] is not None
+        trechos_risco = int(r["trechos_risco"] or 0)
+        
+        if not tem_operacao:
+            status_frota = "DISPONIVEL"
+            nivel_risco = "BAIXO"
+            prob_atraso = 0.0
+            eta_min = 0.0
+            acao = "AGUARDANDO_DESPACHO"
+            custo_desvio = 0.0
+            economia_estimada = 0.0
+        else:
+            status_frota = "EM_TRANSITO"
+            dist_km = float(r["distancia_planejada_km"] or 8.0)
+            tempo_base_min = float(r["tempo_planejado_min"] or 20.0)
+            
+            fator_chuva = min(1.0, precipitacao_referencia_mm / 100.0)
+            score_exposicao = (trechos_risco * 25.0) + (fator_chuva * 40.0)
+            
+            if score_exposicao >= 60.0 or trechos_risco >= 2:
+                nivel_risco = "ALTO"
+                prob_atraso = min(0.95, 0.45 + (fator_chuva * 0.50))
+                eta_min = round(tempo_base_min * 1.6, 1)
+                acao = "ALTERAR_ROTA_IMEDIATO"
+                custo_desvio = round(dist_km * 0.35 * 6.50, 2)
+                economia_estimada = 2800.00
+                veiculos_em_risco += 1
+                impacto_financeiro_evitavel_total += economia_estimada
+            elif score_exposicao >= 35.0 or trechos_risco == 1:
+                nivel_risco = "MEDIO"
+                prob_atraso = min(0.70, 0.25 + (fator_chuva * 0.35))
+                eta_min = round(tempo_base_min * 1.25, 1)
+                acao = "MONITORAR_ALERTA"
+                custo_desvio = 0.0
+                economia_estimada = 0.0
+            else:
+                nivel_risco = "BAIXO"
+                prob_atraso = 0.05
+                eta_min = tempo_base_min
+                acao = "MANTER_CURSO"
+                custo_desvio = 0.0
+                economia_estimada = 0.0
+
+        frota.append({
+            "id_veiculo": r["id_veiculo"],
+            "placa": r["placa"],
+            "modelo": r["modelo"],
+            "tipo_veiculo": r["tipo_veiculo"],
+            "status_monitoramento": status_frota,
+            "operacao_atual": {
+                "id_operacao": r["id_operacao"],
+                "rota": f"{r['origem_nome']} -> {r['destino_nome']}" if tem_operacao else None,
+                "distancia_km": float(r["distancia_planejada_km"]) if tem_operacao and r["distancia_planejada_km"] is not None else None,
+                "eta_estimado_min": eta_min
+            } if tem_operacao else None,
+            "analise_risco": {
+                "nivel": nivel_risco,
+                "probabilidade_atraso_pct": round(prob_atraso * 100, 1),
+                "trechos_vulneraveis_rota": trechos_risco,
+                "recomendacao_acao": acao
+            },
+            "impacto_financeiro_projetado": {
+                "custo_desvio_brl": custo_desvio,
+                "economia_potencial_brl": economia_estimada
+            }
+        })
+
+    return {
+        "tenant_id": tenant_id,
+        "clima_referencia_mm": precipitacao_referencia_mm,
+        "sumario_central": {
+            "total_frota": total_veiculos,
+            "em_operacao": sum(1 for v in frota if v["status_monitoramento"] == "EM_TRANSITO"),
+            "veiculos_alto_risco": veiculos_em_risco,
+            "taxa_comprometimento_pct": round((veiculos_em_risco / max(1, total_veiculos)) * 100, 1),
+            "economia_potencial_total_brl": round(impacto_financeiro_evitavel_total, 2)
+        },
+        "veiculos": frota
+    }
+
+from app.services.weather_alert_engine import SevereWeatherEngine
+
+@router.get("/alertas-meteorologicos", dependencies=[Depends(aplicar_rate_limit)])
+async def obter_alertas_meteorologicos_regiao(precipitacao_mm: float = 65.0, rajada_vento_kmh: float = 40.0):
+    alerta = SevereWeatherEngine.parse_alert_severity(precipitacao_mm, rajada_vento_kmh)
+    return {
+        "fonte": "SPRain Unified Weather Feed (CGE/INMET/CEMADEN)",
+        "jurisdicao": "Regiao Metropolitana de Sao Paulo - Polo Zona Leste",
+        "alerta": alerta
+    }
