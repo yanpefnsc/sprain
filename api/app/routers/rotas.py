@@ -1,4 +1,5 @@
-﻿import json
+from app.seguranca import require_role
+import json
 import asyncpg
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
@@ -194,3 +195,42 @@ async def calcular_rota(dados: RotaRequest, conn: asyncpg.Connection = Depends(g
         "rota_geojson": rota_alt["rota_geojson"]
     }
 
+
+@router.get("/intermunicipal", dependencies=[Depends(require_role(["ADMIN", "OPERATOR", "VIEWER"]))])
+async def calcular_rota_intermunicipal(
+    origem: str = "Araraquara",
+    destino: str = "Sao Paulo (Itaquera)",
+    conn: asyncpg.Connection = Depends(get_connection)
+):
+    query_corredor = """
+        SELECT 
+            id_trecho,
+            name,
+            ROUND((length / 1000.0)::numeric, 1) AS distancia_km,
+            ROUND(((length / 1000.0) / 80.0 * 60.0)::numeric, 1) AS tempo_estimado_min
+        FROM corredor_sp_araraquara
+        ORDER BY id_trecho;
+    """
+    segmentos = await conn.fetch(query_corredor)
+    
+    total_km = sum(float(s["distancia_km"]) for s in segmentos)
+    tempo_total_min = sum(float(s["tempo_estimado_min"]) for s in segmentos)
+    
+    return {
+        "modalidade": "ROTEAMENTO_HIERARQUICO_INTERMUNICIPAL",
+        "origem": origem,
+        "destino": destino,
+        "resumo": {
+            "distancia_total_km": round(total_km, 1),
+            "tempo_estimado_total_min": round(tempo_total_min, 1),
+            "eixos_principais": ["SP-310 (Washington Luis)", "SP-330 (Anhanguera)", "SP-348 (Bandeirantes)"]
+        },
+        "segmentos_macro": [
+            {
+                "id_segmento": s["id_trecho"],
+                "descricao": s["name"],
+                "distancia_km": float(s["distancia_km"]),
+                "tempo_min": float(s["tempo_estimado_min"])
+            } for s in segmentos
+        ]
+    }
