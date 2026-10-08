@@ -15,3 +15,5 @@ diagnostico_projeto.txt
 !db/ci/*.sql
 
 cache/
+
+!scripts/migracao_pedagios.sql
