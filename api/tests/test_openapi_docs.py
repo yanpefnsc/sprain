@@ -18,9 +18,9 @@ async def test_esquema_openapi_e_tags_corporativas():
         assert resp.status_code == 200
         data = resp.json()
         assert data["info"]["title"] == "SPRain B2B - Climate Resilience & Logistics Intelligence API"
-        assert data["info"]["version"] == "1.0.0"
+        assert data["info"]["version"] == "1.1.0"
         assert "openapi" in data
         
         tag_names = [t["name"] for t in data.get("tags", [])]
-        assert "Logística & Roteamento Resiliente" in tag_names
+        assert "Logistica & Roteamento Resiliente" in tag_names
         assert "Healthchecks & Infraestrutura" in tag_names

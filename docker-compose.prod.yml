@@ -1,14 +1,12 @@
-﻿version: '3.8'
-
 services:
   sprain_db:
-    image: postgis/postgis:15-3.3
+    image: pgrouting/pgrouting@sha256:5e6767abbd1fd9ead84c9988aa31bac71ca292ef8a1fc2e4a5ee2b613ac6a7bb
     container_name: sprain_db_prod
     restart: always
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sprain_password}
-      POSTGRES_DB: ${POSTGRES_DB:-enchentes}
+      POSTGRES_DB: ${DB_NAME:-enchentes}
+      POSTGRES_USER: ${DB_USER:-enchentes}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-enchentes}
     volumes:
       - sprain_db_prod_data:/var/lib/postgresql/data
     networks:
@@ -22,22 +20,25 @@ services:
           cpus: '0.5'
           memory: 1G
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-enchentes}"]
-      interval: 10s
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-enchentes} -d ${DB_NAME:-enchentes}"]
+      interval: 5s
       timeout: 5s
       retries: 5
 
   sprain_api:
     build:
-      context: ./api
+      context: .
       dockerfile: Dockerfile
     container_name: sprain_api_prod
     restart: always
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-sprain_password}@sprain_db:5432/${POSTGRES_DB:-enchentes}
-      ENVIRONMENT: production
-      DB_POOL_MIN_SIZE: ${DB_POOL_MIN_SIZE:-5}
-      DB_POOL_MAX_SIZE: ${DB_POOL_MAX_SIZE:-20}
+      DB_HOST: sprain_db
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER:-enchentes}
+      DB_PASSWORD: ${DB_PASSWORD:-enchentes}
+      DB_NAME: ${DB_NAME:-enchentes}
+      API_KEYS: ${API_KEYS:-key_admin_demo,key_operator_demo,key_viewer_demo}
+      TENANT_API_KEYS: ${TENANT_API_KEYS:-key_admin_demo:ADMIN:demo_corp;key_operator_demo:OPERATOR:demo_corp;key_viewer_demo:VIEWER:demo_corp;key_admin_express:ADMIN:log_express}
     ports:
       - "8000:8000"
     depends_on:

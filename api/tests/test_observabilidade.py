@@ -7,7 +7,8 @@ TIMEOUT = httpx.Timeout(30.0, connect=10.0)
 @pytest.mark.asyncio
 async def test_middleware_injeta_header_process_time():
     async with httpx.AsyncClient(base_url=BASE_URL, timeout=TIMEOUT) as client:
-        resp = await client.get("/veiculos?tenant_id=demo_corp")
+        headers = {"X-API-Key": "key_admin_demo"}
+        resp = await client.get("/veiculos?tenant_id=demo_corp", headers=headers)
         assert resp.status_code == 200
         assert "x-process-time-ms" in resp.headers
         latencia = float(resp.headers["x-process-time-ms"])
@@ -16,7 +17,7 @@ async def test_middleware_injeta_header_process_time():
 @pytest.mark.asyncio
 async def test_endpoint_metricas_observabilidade():
     async with httpx.AsyncClient(base_url=BASE_URL, timeout=TIMEOUT) as client:
-        headers = {"X-API-Key": "key_admin_sprain"}
+        headers = {"X-API-Key": "key_admin_demo"}
         resp = await client.get("/observabilidade/metricas", headers=headers)
         assert resp.status_code == 200
         data = resp.json()
@@ -28,6 +29,6 @@ async def test_endpoint_metricas_observabilidade():
 @pytest.mark.asyncio
 async def test_bloqueio_viewer_reset_metricas():
     async with httpx.AsyncClient(base_url=BASE_URL, timeout=TIMEOUT) as client:
-        headers = {"X-API-Key": "key_viewer_sprain"}
+        headers = {"X-API-Key": "key_viewer_demo"}
         resp = await client.post("/observabilidade/reset", headers=headers)
         assert resp.status_code == 403

@@ -33,7 +33,7 @@ router = APIRouter(prefix="/api/v1/logistica", tags=["Logística B2B"])
 def resolve_tenant(x_tenant_id: Optional[str] = Header(None), tenant_id: Optional[str] = Query(None)) -> str:
     return x_tenant_id or tenant_id or "demo_corp"
 
-@router.post("/veiculos")
+@router.post("/veiculos", dependencies=[Depends(require_role(["ADMIN", "OPERATOR"])), Depends(aplicar_rate_limit)])
 async def cadastrar_veiculo(dados: VeiculoCreate, conn: asyncpg.Connection = Depends(get_connection)):
     query = """
     INSERT INTO veiculos (id_veiculo, placa, modelo, tipo_veiculo, lat_atual, lon_atual, tenant_id)
@@ -45,12 +45,12 @@ async def cadastrar_veiculo(dados: VeiculoCreate, conn: asyncpg.Connection = Dep
     res = await conn.fetchval(query, dados.id_veiculo, dados.placa, dados.modelo, dados.tipo_veiculo, dados.lat_atual, dados.lon_atual, dados.tenant_id)
     return {"sucesso": True, "id_veiculo": res, "tenant_id": dados.tenant_id}
 
-@router.get("/veiculos", dependencies=[Depends(aplicar_rate_limit)])
+@router.get("/veiculos", dependencies=[Depends(require_role(["ADMIN", "OPERATOR", "VIEWER"])), Depends(aplicar_rate_limit)])
 async def listar_veiculos(tenant_id: str = Depends(resolve_tenant), conn: asyncpg.Connection = Depends(get_connection)):
     rows = await conn.fetch("SELECT * FROM veiculos WHERE tenant_id = $1 ORDER BY id_veiculo;", tenant_id)
     return [dict(r) for r in rows]
 
-@router.post("/operacoes")
+@router.post("/operacoes", dependencies=[Depends(require_role(["ADMIN", "OPERATOR"])), Depends(aplicar_rate_limit)])
 async def criar_operacao(dados: OperacaoCreate, conn: asyncpg.Connection = Depends(get_connection)):
     rota_inicial = await RoutingEngine.compute_route(
         conn, dados.origem_lon, dados.origem_lat, dados.destino_lon, dados.destino_lat, profile="FASTEST", rain_mm=0.0
@@ -349,7 +349,7 @@ async def exportar_plano_contingencia_csv(tenant_id: str = Depends(resolve_tenan
         headers={"Content-Disposition": f"attachment; filename=plano_contingencia_{tenant_id}.csv"}
     )
 
-@router.post("/operacoes/importar-lote")
+@router.post("/operacoes/importar-lote", dependencies=[Depends(require_role(["ADMIN", "OPERATOR"])), Depends(aplicar_rate_limit)])
 async def importar_operacoes_lote(lote: List[Dict[str, Any]], tenant_id: str = Depends(resolve_tenant), conn: asyncpg.Connection = Depends(get_connection)):
     sucessos = 0
     erros = []
@@ -556,15 +556,24 @@ async def obter_auditoria_acuracia(conn: asyncpg.Connection = Depends(get_connec
     row = await conn.fetchrow(query)
     
     total = int(row["total_avaliado"] or 0)
-    vp = int(row["vp"] or 42)
-    fp = int(row["fp"] or 5)
-    vn = int(row["vn"] or 48)
-    fn = int(row["fn"] or 3)
+    vp = int(row["vp"] or 0)
+    fp = int(row["fp"] or 0)
+    vn = int(row["vn"] or 0)
+    fn = int(row["fn"] or 0)
     
     base_calc = vp + fp + vn + fn
+    if base_calc == 0:
+        return {
+            "amostra_historica_total": 0,
+            "matriz_confusao": {"verdadeiros_positivos": 0, "falsos_positivos": 0, "verdadeiros_negativos": 0, "falsos_negativos": 0},
+            "metricas_resiliencia": {"acuracia_global_pct": 0.0, "precisao_alertas_pct": 0.0, "sensibilidade_deteccao_pct": 0.0},
+            "status_motor": "SEM_DADOS_SUFICIENTES",
+            "aviso": "Auditoria sem registros operacionais reais no banco."
+        }
+    
     acuracia = round(((vp + vn) / base_calc) * 100.0, 1)
-    precisao = round((vp / (vp + fp)) * 100.0, 1)
-    sensibilidade = round((vp / (vp + fn)) * 100.0, 1)
+    precisao = round((vp / max(1, vp + fp)) * 100.0, 1)
+    sensibilidade = round((vp / max(1, vp + fn)) * 100.0, 1)
 
     return {
         "amostra_historica_total": base_calc,
@@ -609,15 +618,42 @@ import io
 from fastapi.responses import StreamingResponse
 
 @router.get("/relatorios/auditoria.csv", dependencies=[Depends(require_role(["ADMIN", "OPERATOR"]))])
-async def exportar_auditoria_csv(tenant_id: str = "demo_corp"):
+async def exportar_auditoria_csv(tenant_id: str = Depends(resolve_tenant), conn: asyncpg.Connection = Depends(get_connection)):
+    query = """
+        SELECT 
+            COALESCE(o.id_veiculo, 'N/A') AS id_veiculo,
+            COALESCE(o.origem_nome, 'Origem') AS origem,
+            COALESCE(o.destino_nome, 'Destino') AS destino,
+            COALESCE(c.precipitacao_mm, 0.0) AS precipitacao_mm,
+            COALESCE(r.nivel_risco, 'NORMAL') AS impacto_detectado,
+            COALESCE(r.prejuizo_potencial_evitado, 0.0) AS custo_evitado_reais,
+            TO_CHAR(COALESCE(r.gerado_em, o.criado_em), 'YYYY-MM-DD HH24:MI') AS data_registro
+        FROM operacoes o
+        LEFT JOIN recomendacoes_operacao r ON r.id_operacao = o.id_operacao AND r.tenant_id = o.tenant_id
+        LEFT JOIN cenarios_clima c ON c.id_cenario = r.id_cenario
+        WHERE o.tenant_id = $1
+        ORDER BY o.criado_em DESC
+        LIMIT 500;
+    """
+    rows = await conn.fetch(query, tenant_id)
     output = io.StringIO()
     writer = csv.writer(output, delimiter=";")
-    writer.writerow(["id_veiculo", "origem", "destino", "precipitacao_mm", "impacto_detectado", "custo_evitado_reais", "data_simulacao"])
+    writer.writerow(["id_veiculo", "origem", "destino", "precipitacao_mm", "impacto_detectado", "custo_evitado_reais", "data_registro"])
     
-    writer.writerow(["SP-V01", "Itaquera", "Bras", 75.0, "ALTO_RISCO", 1850.00, "2026-10-08 06:00"])
-    writer.writerow(["SP-V02", "Tatuape", "Lapa", 60.0, "MEDIO_RISCO", 950.00, "2026-10-08 06:15"])
-    writer.writerow(["SP-V03", "Mooca", "Pinheiros", 20.0, "BAIXO_RISCO", 0.00, "2026-10-08 06:30"])
-    
+    if not rows:
+        writer.writerow(["SEM_DADOS", "Nenhum registro para o tenant informado", "", 0.0, "N/A", 0.0, ""])
+    else:
+        for r in rows:
+            writer.writerow([
+                r["id_veiculo"],
+                r["origem"],
+                r["destino"],
+                r["precipitacao_mm"],
+                r["impacto_detectado"],
+                r["custo_evitado_reais"],
+                r["data_registro"]
+            ])
+            
     output.seek(0)
     return StreamingResponse(
         iter([output.getvalue()]),
@@ -626,18 +662,35 @@ async def exportar_auditoria_csv(tenant_id: str = "demo_corp"):
     )
 
 @router.get("/relatorios/sumario-executivo", dependencies=[Depends(require_role(["ADMIN", "OPERATOR", "VIEWER"]))])
-async def obter_sumario_executivo(tenant_id: str = "demo_corp"):
+async def obter_sumario_executivo(tenant_id: str = Depends(resolve_tenant), conn: asyncpg.Connection = Depends(get_connection)):
+    query = """
+        SELECT 
+            COUNT(DISTINCT o.id_operacao)::int AS total_operacoes,
+            COUNT(DISTINCT r.id_operacao) FILTER (WHERE r.nivel_risco IN ('CRITICO', 'RISCO'))::int AS rotas_em_risco,
+            COUNT(DISTINCT r.id_operacao) FILTER (WHERE r.tipo_acao = 'ALTERAR_ROTA')::int AS rotas_recalculadas,
+            COALESCE(SUM(r.prejuizo_potencial_evitado), 0.0)::float AS prejuizo_evitado,
+            COALESCE(SUM(r.minutos_adicionais), 0.0)::float AS tempo_desvios
+        FROM operacoes o
+        LEFT JOIN recomendacoes_operacao r ON r.id_operacao = o.id_operacao AND r.tenant_id = o.tenant_id
+        WHERE o.tenant_id = $1;
+    """
+    row = await conn.fetchrow(query, tenant_id)
+    total_ops = int(row["total_operacoes"] or 0)
+    rotas_risco = int(row["rotas_em_risco"] or 0)
+    recalculadas = int(row["rotas_recalculadas"] or 0)
+    indice_resiliencia = 100.0 if rotas_risco == 0 else round((recalculadas / max(1, rotas_risco)) * 100.0, 1)
+
     return {
         "tenant_id": tenant_id,
         "periodo": "D-0 / D+1",
         "kpis": {
-            "total_operacoes": 148,
-            "rotas_em_risco_alagamento": 32,
-            "rotas_recalculadas_com_sucesso": 32,
-            "indice_resiliencia_pct": 100.0,
-            "prejuizo_estimado_evitado_brl": 58400.00,
-            "tempo_total_desvios_min": 415.5,
-            "status_sla": "OPERACAO_PROTEGIDA"
+            "total_operacoes": total_ops,
+            "rotas_em_risco_alagamento": rotas_risco,
+            "rotas_recalculadas_com_sucesso": recalculadas,
+            "indice_resiliencia_pct": indice_resiliencia,
+            "prejuizo_estimado_evitado_brl": round(float(row["prejuizo_evitado"] or 0.0), 2),
+            "tempo_total_desvios_min": round(float(row["tempo_desvios"] or 0.0), 1),
+            "status_sla": "OPERACAO_PROTEGIDA" if (rotas_risco == 0 or recalculadas == rotas_risco) else "ATENCAO_OPERACIONAL"
         }
     }
 
@@ -839,3 +892,8 @@ async def obter_alertas_meteorologicos_regiao(precipitacao_mm: float = 65.0, raj
         "jurisdicao": "Regiao Metropolitana de Sao Paulo - Polo Zona Leste",
         "alerta": alerta
     }
+
+@router.post("/rate-limit/reset", dependencies=[Depends(require_role(["ADMIN"]))])
+async def resetar_rate_limit_servidor():
+    TenantRateLimiter.reset()
+    return {"sucesso": True, "status": "RATE_LIMIT_RESETADO"}

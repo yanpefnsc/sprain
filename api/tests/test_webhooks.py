@@ -1,8 +1,5 @@
 import pytest
 import httpx
-import hmac
-import hashlib
-import json
 
 BASE_URL = "http://127.0.0.1:8000/api/v1/logistica"
 TIMEOUT = httpx.Timeout(30.0, connect=10.0)
@@ -10,7 +7,7 @@ TIMEOUT = httpx.Timeout(30.0, connect=10.0)
 @pytest.mark.asyncio
 async def test_configuracao_webhook_admin():
     async with httpx.AsyncClient(base_url=BASE_URL, timeout=TIMEOUT) as client:
-        headers = {"X-API-Key": "key_admin_sprain"}
+        headers = {"X-API-Key": "key_admin_demo"}
         payload = {
             "url": "https://logistica.parceiro.com/api/alerta",
             "secret": "chave_secreta_integracao_2026",
@@ -25,7 +22,7 @@ async def test_configuracao_webhook_admin():
 @pytest.mark.asyncio
 async def test_disparo_webhook_com_assinatura_hmac():
     async with httpx.AsyncClient(base_url=BASE_URL, timeout=TIMEOUT) as client:
-        headers = {"X-API-Key": "key_operator_sprain"}
+        headers = {"X-API-Key": "key_operator_demo"}
         payload_teste = {
             "evento": "ALERTA_ALAGAMENTO",
             "dados": {

@@ -16,31 +16,31 @@ async def lifespan(app: FastAPI):
 
 tags_metadata = [
     {
-        "name": "Logística & Roteamento Resiliente",
-        "description": "Simulação de impacto viário por alagamentos, previsão D-1 e roteamento de frotas sobre a malha PostGIS."
+        "name": "Logistica & Roteamento Resiliente",
+        "description": "Simulacao de impacto viario por alagamentos, previsao D-1 e roteamento de frotas sobre a malha PostGIS."
     },
     {
-        "name": "Relatórios & Auditoria Executiva",
-        "description": "Exportação tabular CSV em streaming e sumários consolidados de KPIs de resiliência e prejuízo evitado."
+        "name": "Relatorios & Auditoria Executiva",
+        "description": "Exportacao tabular CSV em streaming e sumarios consolidados de KPIs de resiliencia e prejuizo evitado."
     },
     {
         "name": "Webhooks Corporativos",
-        "description": "Assinatura HMAC-SHA256 e despacho assíncrono de eventos críticos de rota e alagamento para ERPs e TMSs."
+        "description": "Assinatura HMAC-SHA256 e despacho assincrono de eventos criticos de rota e alagamento para ERPs e TMSs."
     },
     {
         "name": "Observabilidade & Quotas",
-        "description": "Telemetria de performance em tempo real, monitoramento de latência e governança de rate limit."
+        "description": "Telemetria de performance em tempo real, monitoramento de latencia e governanca de rate limit."
     },
     {
         "name": "Healthchecks & Infraestrutura",
-        "description": "Sondas de vivacidade (liveness) e prontidão (readiness) com validação de conexão ativa na malha viária."
+        "description": "Sondas de vivacidade (liveness) e prontidao (readiness) com validacao de conexao ativa na malha viaria."
     }
 ]
 
 app = FastAPI(
     title="SPRain B2B - Climate Resilience & Logistics Intelligence API",
-    description="Plataforma corporativa de inteligência climática, predição de intransitabilidade urbana e roteamento dinâmico de frotas.",
-    version="1.0.0",
+    description="Plataforma corporativa de inteligencia climatica, predicao de intransitabilidade urbana e roteamento dinamico de frotas.",
+    version="1.1.0",
     lifespan=lifespan,
     openapi_tags=tags_metadata,
     docs_url="/docs",
@@ -54,7 +54,7 @@ app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
