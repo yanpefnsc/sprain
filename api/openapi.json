@@ -1,0 +1,2078 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "SPRain B2B - Climate Resilience & Logistics Intelligence API",
+    "description": "Plataforma corporativa de inteligência climática, predição de intransitabilidade urbana e roteamento dinâmico de frotas.",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/api/v1/trechos/geojson": {
+      "get": {
+        "tags": [
+          "Trechos Viarios"
+        ],
+        "summary": "Get Trechos Geojson",
+        "operationId": "get_trechos_geojson_api_v1_trechos_geojson_get",
+        "parameters": [
+          {
+            "name": "classe",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Classe"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 35000,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/estatisticas/distrito": {
+      "get": {
+        "tags": [
+          "Estatisticas e Monitoramento"
+        ],
+        "summary": "Get Estatisticas Distrito",
+        "operationId": "get_estatisticas_distrito_api_v1_estatisticas_distrito_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResumoEstatisticas"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/estatisticas/historico-temporal": {
+      "get": {
+        "tags": [
+          "Estatisticas e Monitoramento"
+        ],
+        "summary": "Obter Historico Temporal",
+        "operationId": "obter_historico_temporal_api_v1_estatisticas_historico_temporal_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ocorrencias/alerta-rapido": {
+      "post": {
+        "tags": [
+          "Ocorrências"
+        ],
+        "summary": "Registrar Alerta Rapido",
+        "operationId": "registrar_alerta_rapido_api_v1_ocorrencias_alerta_rapido_post",
+        "parameters": [
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AlertaRapidoCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ocorrencias/ativas": {
+      "get": {
+        "tags": [
+          "Ocorrências"
+        ],
+        "summary": "Listar Ocorrencias Ativas",
+        "operationId": "listar_ocorrencias_ativas_api_v1_ocorrencias_ativas_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ocorrencias/resetar-todas": {
+      "post": {
+        "tags": [
+          "Ocorrências"
+        ],
+        "summary": "Resetar Todas Ocorrencias",
+        "operationId": "resetar_todas_ocorrencias_api_v1_ocorrencias_resetar_todas_post",
+        "parameters": [
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ocorrencias/processar-texto": {
+      "post": {
+        "tags": [
+          "Ocorrências"
+        ],
+        "summary": "Processar Texto",
+        "operationId": "processar_texto_api_v1_ocorrencias_processar_texto_post",
+        "parameters": [
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OcorrenciaTextoCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/rotas/calcular": {
+      "post": {
+        "tags": [
+          "Rotas e Navegação"
+        ],
+        "summary": "Calcular Rota",
+        "operationId": "calcular_rota_api_v1_rotas_calcular_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RotaRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/simulacao/disparar": {
+      "post": {
+        "tags": [
+          "Simulação de Chuva"
+        ],
+        "summary": "Disparar Simulacao",
+        "operationId": "disparar_simulacao_api_v1_simulacao_disparar_post",
+        "parameters": [
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimulacaoRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/relatorios/boletim-defesa-civil/json": {
+      "get": {
+        "tags": [
+          "Relatorios"
+        ],
+        "summary": "Gerar Boletim Json",
+        "operationId": "gerar_boletim_json_api_v1_relatorios_boletim_defesa_civil_json_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/relatorios/boletim-defesa-civil/csv": {
+      "get": {
+        "tags": [
+          "Relatorios"
+        ],
+        "summary": "Gerar Boletim Csv",
+        "operationId": "gerar_boletim_csv_api_v1_relatorios_boletim_defesa_civil_csv_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/monitoramento/sincronizar-cge": {
+      "post": {
+        "tags": [
+          "Monitoramento"
+        ],
+        "summary": "Sincronizar Cge",
+        "operationId": "sincronizar_cge_api_v1_monitoramento_sincronizar_cge_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/logistica/veiculos": {
+      "post": {
+        "tags": [
+          "Logística B2B"
+        ],
+        "summary": "Cadastrar Veiculo",
+        "operationId": "cadastrar_veiculo_api_v1_logistica_veiculos_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VeiculoCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Logística B2B"
+        ],
+        "summary": "Listar Veiculos",
+        "operationId": "listar_veiculos_api_v1_logistica_veiculos_get",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tenant Id"
+            }
+          },
+          {
+            "name": "x-tenant-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/logistica/operacoes": {
+      "post": {
+        "tags": [
+          "Logística B2B"
+        ],
+        "summary": "Criar Operacao",
+        "operationId": "criar_operacao_api_v1_logistica_operacoes_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperacaoCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Logística B2B"
+        ],
+        "summary": "Listar Operacoes",
+        "operationId": "listar_operacoes_api_v1_logistica_operacoes_get",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tenant Id"
+            }
+          },
+          {
+            "name": "x-tenant-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/logistica/simular-impacto": {
+      "post": {
+        "tags": [
+          "Logística B2B"
+        ],
+        "summary": "Simular Impacto",
+        "operationId": "simular_impacto_api_v1_logistica_simular_impacto_post",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "demo_corp",
+              "title": "Tenant Id"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimulacaoB2BRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/logistica/operacoes/{id_operacao}/explicacao": {
+      "get": {
+        "tags": [
+          "Logística B2B"
+        ],
+        "summary": "Obter Explicacao Decisao",
+        "operationId": "obter_explicacao_decisao_api_v1_logistica_operacoes__id_operacao__explicacao_get",
+        "parameters": [
+          {
+            "name": "id_operacao",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Id Operacao"
+            }
+          },
+          {
+            "name": "tenant_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tenant Id"
+            }
+          },
+          {
+            "name": "x-tenant-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/logistica/exportar-contingencia/csv": {
+      "get": {
+        "tags": [
+          "Logística B2B"
+        ],
+        "summary": "Exportar Plano Contingencia Csv",
+        "operationId": "exportar_plano_contingencia_csv_api_v1_logistica_exportar_contingencia_csv_get",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tenant Id"
+            }
+          },
+          {
+            "name": "x-tenant-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/logistica/operacoes/importar-lote": {
+      "post": {
+        "tags": [
+          "Logística B2B"
+        ],
+        "summary": "Importar Operacoes Lote",
+        "operationId": "importar_operacoes_lote_api_v1_logistica_operacoes_importar_lote_post",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tenant Id"
+            }
+          },
+          {
+            "name": "x-tenant-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": true
+                },
+                "title": "Lote"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/logistica/alertas/disparar-webhook": {
+      "post": {
+        "tags": [
+          "Logística B2B"
+        ],
+        "summary": "Disparar Alerta Webhook",
+        "operationId": "disparar_alerta_webhook_api_v1_logistica_alertas_disparar_webhook_post",
+        "parameters": [
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookAlertaRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/logistica/alertas/ativos": {
+      "get": {
+        "tags": [
+          "Logística B2B"
+        ],
+        "summary": "Listar Alertas Ativos",
+        "operationId": "listar_alertas_ativos_api_v1_logistica_alertas_ativos_get",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tenant Id"
+            }
+          },
+          {
+            "name": "x-tenant-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/logistica/planejamento-d1": {
+      "post": {
+        "tags": [
+          "Logística B2B"
+        ],
+        "summary": "Planejar Operacoes D1",
+        "operationId": "planejar_operacoes_d1_api_v1_logistica_planejamento_d1_post",
+        "parameters": [
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanejamentoD1Request"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/logistica/auditoria/acuracia": {
+      "get": {
+        "tags": [
+          "Logística B2B"
+        ],
+        "summary": "Obter Auditoria Acuracia",
+        "operationId": "obter_auditoria_acuracia_api_v1_logistica_auditoria_acuracia_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/logistica/performance/cache": {
+      "get": {
+        "tags": [
+          "Logística B2B"
+        ],
+        "summary": "Obter Status Cache",
+        "operationId": "obter_status_cache_api_v1_logistica_performance_cache_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/logistica/performance/cache/limpar": {
+      "post": {
+        "tags": [
+          "Logística B2B"
+        ],
+        "summary": "Limpar Cache",
+        "operationId": "limpar_cache_api_v1_logistica_performance_cache_limpar_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/logistica/observabilidade/metricas": {
+      "get": {
+        "tags": [
+          "Logística B2B"
+        ],
+        "summary": "Obter Metricas Sistema",
+        "operationId": "obter_metricas_sistema_api_v1_logistica_observabilidade_metricas_get",
+        "parameters": [
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/logistica/observabilidade/reset": {
+      "post": {
+        "tags": [
+          "Logística B2B"
+        ],
+        "summary": "Resetar Metricas Sistema",
+        "operationId": "resetar_metricas_sistema_api_v1_logistica_observabilidade_reset_post",
+        "parameters": [
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/logistica/relatorios/auditoria.csv": {
+      "get": {
+        "tags": [
+          "Logística B2B"
+        ],
+        "summary": "Exportar Auditoria Csv",
+        "operationId": "exportar_auditoria_csv_api_v1_logistica_relatorios_auditoria_csv_get",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "demo_corp",
+              "title": "Tenant Id"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/logistica/relatorios/sumario-executivo": {
+      "get": {
+        "tags": [
+          "Logística B2B"
+        ],
+        "summary": "Obter Sumario Executivo",
+        "operationId": "obter_sumario_executivo_api_v1_logistica_relatorios_sumario_executivo_get",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "demo_corp",
+              "title": "Tenant Id"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/logistica/webhooks/configurar": {
+      "post": {
+        "tags": [
+          "Logística B2B"
+        ],
+        "summary": "Configurar Webhook Tenant",
+        "operationId": "configurar_webhook_tenant_api_v1_logistica_webhooks_configurar_post",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "demo_corp",
+              "title": "Tenant Id"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookConfigRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/logistica/webhooks/testar": {
+      "post": {
+        "tags": [
+          "Logística B2B"
+        ],
+        "summary": "Testar Webhook Tenant",
+        "operationId": "testar_webhook_tenant_api_v1_logistica_webhooks_testar_post",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "demo_corp",
+              "title": "Tenant Id"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookTestRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "Infraestrutura"
+        ],
+        "summary": "Health Check",
+        "operationId": "health_check_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/health/liveness": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Check Liveness",
+        "operationId": "check_liveness_api_v1_health_liveness_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/health/readiness": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Check Readiness",
+        "operationId": "check_readiness_api_v1_health_readiness_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AlertaRapidoCreate": {
+        "properties": {
+          "latitude": {
+            "type": "number",
+            "maximum": 90.0,
+            "minimum": -90.0,
+            "title": "Latitude"
+          },
+          "longitude": {
+            "type": "number",
+            "maximum": 180.0,
+            "minimum": -180.0,
+            "title": "Longitude"
+          },
+          "nivel": {
+            "type": "string",
+            "pattern": "^(VERDE|AMARELO|LARANJA|VERMELHO)$",
+            "title": "Nivel"
+          },
+          "corporacao": {
+            "type": "string",
+            "title": "Corporacao",
+            "default": "DEFESA_CIVIL"
+          },
+          "observacao": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observacao"
+          }
+        },
+        "type": "object",
+        "required": [
+          "latitude",
+          "longitude",
+          "nivel"
+        ],
+        "title": "AlertaRapidoCreate"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "OcorrenciaTextoCreate": {
+        "properties": {
+          "texto": {
+            "type": "string",
+            "title": "Texto"
+          },
+          "fonte": {
+            "type": "string",
+            "title": "Fonte",
+            "default": "OPERACIONAL"
+          }
+        },
+        "type": "object",
+        "required": [
+          "texto"
+        ],
+        "title": "OcorrenciaTextoCreate"
+      },
+      "OperacaoCreate": {
+        "properties": {
+          "tenant_id": {
+            "type": "string",
+            "title": "Tenant Id",
+            "default": "demo_corp"
+          },
+          "id_operacao": {
+            "type": "string",
+            "title": "Id Operacao"
+          },
+          "id_veiculo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Veiculo"
+          },
+          "origem_nome": {
+            "type": "string",
+            "title": "Origem Nome"
+          },
+          "origem_lat": {
+            "type": "number",
+            "maximum": 90.0,
+            "minimum": -90.0,
+            "title": "Origem Lat"
+          },
+          "origem_lon": {
+            "type": "number",
+            "maximum": 180.0,
+            "minimum": -180.0,
+            "title": "Origem Lon"
+          },
+          "destino_nome": {
+            "type": "string",
+            "title": "Destino Nome"
+          },
+          "destino_lat": {
+            "type": "number",
+            "maximum": 90.0,
+            "minimum": -90.0,
+            "title": "Destino Lat"
+          },
+          "destino_lon": {
+            "type": "number",
+            "maximum": 180.0,
+            "minimum": -180.0,
+            "title": "Destino Lon"
+          },
+          "janela_inicio": {
+            "type": "string",
+            "title": "Janela Inicio"
+          },
+          "janela_fim": {
+            "type": "string",
+            "title": "Janela Fim"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id_operacao",
+          "origem_nome",
+          "origem_lat",
+          "origem_lon",
+          "destino_nome",
+          "destino_lat",
+          "destino_lon",
+          "janela_inicio",
+          "janela_fim"
+        ],
+        "title": "OperacaoCreate"
+      },
+      "ParametrosFinanceiros": {
+        "properties": {
+          "custo_por_km": {
+            "type": "number",
+            "title": "Custo Por Km",
+            "default": 4.5
+          },
+          "custo_hora_motorista": {
+            "type": "number",
+            "title": "Custo Hora Motorista",
+            "default": 35.0
+          },
+          "custo_operacional_veiculo_hora": {
+            "type": "number",
+            "title": "Custo Operacional Veiculo Hora",
+            "default": 50.0
+          },
+          "custo_atraso_hora": {
+            "type": "number",
+            "title": "Custo Atraso Hora",
+            "default": 120.0
+          },
+          "prejuizo_potencial_alagamento": {
+            "type": "number",
+            "title": "Prejuizo Potencial Alagamento",
+            "default": 3500.0
+          }
+        },
+        "type": "object",
+        "title": "ParametrosFinanceiros"
+      },
+      "PlanejamentoD1Request": {
+        "properties": {
+          "data_alvo": {
+            "type": "string",
+            "title": "Data Alvo"
+          },
+          "previsao_chuva_mm": {
+            "type": "number",
+            "title": "Previsao Chuva Mm"
+          },
+          "fator_severidade": {
+            "type": "number",
+            "title": "Fator Severidade",
+            "default": 1.0
+          },
+          "tenant_id": {
+            "type": "string",
+            "title": "Tenant Id",
+            "default": "demo_corp"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data_alvo",
+          "previsao_chuva_mm"
+        ],
+        "title": "PlanejamentoD1Request"
+      },
+      "ResumoEstatisticas": {
+        "properties": {
+          "total_trechos": {
+            "type": "integer",
+            "title": "Total Trechos"
+          },
+          "criticos": {
+            "type": "integer",
+            "title": "Criticos"
+          },
+          "altos": {
+            "type": "integer",
+            "title": "Altos"
+          },
+          "medios": {
+            "type": "integer",
+            "title": "Medios"
+          },
+          "baixos": {
+            "type": "integer",
+            "title": "Baixos"
+          },
+          "ivi_medio": {
+            "type": "number",
+            "title": "Ivi Medio"
+          },
+          "trechos_interditados": {
+            "type": "integer",
+            "title": "Trechos Interditados"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total_trechos",
+          "criticos",
+          "altos",
+          "medios",
+          "baixos",
+          "ivi_medio",
+          "trechos_interditados"
+        ],
+        "title": "ResumoEstatisticas"
+      },
+      "RotaRequest": {
+        "properties": {
+          "origem_lat": {
+            "type": "number",
+            "maximum": 90.0,
+            "minimum": -90.0,
+            "title": "Origem Lat"
+          },
+          "origem_lon": {
+            "type": "number",
+            "maximum": 180.0,
+            "minimum": -180.0,
+            "title": "Origem Lon"
+          },
+          "destino_lat": {
+            "type": "number",
+            "maximum": 90.0,
+            "minimum": -90.0,
+            "title": "Destino Lat"
+          },
+          "destino_lon": {
+            "type": "number",
+            "maximum": 180.0,
+            "minimum": -180.0,
+            "title": "Destino Lon"
+          }
+        },
+        "type": "object",
+        "required": [
+          "origem_lat",
+          "origem_lon",
+          "destino_lat",
+          "destino_lon"
+        ],
+        "title": "RotaRequest"
+      },
+      "SimulacaoB2BRequest": {
+        "properties": {
+          "tenant_id": {
+            "type": "string",
+            "title": "Tenant Id",
+            "default": "demo_corp"
+          },
+          "precipitacao_mm": {
+            "type": "number",
+            "maximum": 250.0,
+            "minimum": 0.0,
+            "title": "Precipitacao Mm"
+          },
+          "parametros_custo": {
+            "$ref": "#/components/schemas/ParametrosFinanceiros",
+            "default": {
+              "custo_por_km": 4.5,
+              "custo_hora_motorista": 35.0,
+              "custo_operacional_veiculo_hora": 50.0,
+              "custo_atraso_hora": 120.0,
+              "prejuizo_potencial_alagamento": 3500.0
+            }
+          }
+        },
+        "type": "object",
+        "required": [
+          "precipitacao_mm"
+        ],
+        "title": "SimulacaoB2BRequest"
+      },
+      "SimulacaoRequest": {
+        "properties": {
+          "milimetros_chuva": {
+            "type": "number",
+            "maximum": 200.0,
+            "minimum": 5.0,
+            "title": "Milimetros Chuva",
+            "description": "Volume acumulado em mm"
+          }
+        },
+        "type": "object",
+        "required": [
+          "milimetros_chuva"
+        ],
+        "title": "SimulacaoRequest"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "VeiculoCreate": {
+        "properties": {
+          "tenant_id": {
+            "type": "string",
+            "title": "Tenant Id",
+            "default": "demo_corp"
+          },
+          "id_veiculo": {
+            "type": "string",
+            "title": "Id Veiculo"
+          },
+          "placa": {
+            "type": "string",
+            "title": "Placa"
+          },
+          "modelo": {
+            "type": "string",
+            "title": "Modelo"
+          },
+          "tipo_veiculo": {
+            "type": "string",
+            "title": "Tipo Veiculo",
+            "default": "VUC"
+          },
+          "lat_atual": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lat Atual"
+          },
+          "lon_atual": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lon Atual"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id_veiculo",
+          "placa",
+          "modelo"
+        ],
+        "title": "VeiculoCreate"
+      },
+      "WebhookAlertaRequest": {
+        "properties": {
+          "webhook_url": {
+            "type": "string",
+            "title": "Webhook Url"
+          },
+          "id_operacao": {
+            "type": "string",
+            "title": "Id Operacao"
+          },
+          "tenant_id": {
+            "type": "string",
+            "title": "Tenant Id",
+            "default": "demo_corp"
+          }
+        },
+        "type": "object",
+        "required": [
+          "webhook_url",
+          "id_operacao"
+        ],
+        "title": "WebhookAlertaRequest"
+      },
+      "WebhookConfigRequest": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "secret": {
+            "type": "string",
+            "title": "Secret"
+          },
+          "eventos": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Eventos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "url",
+          "secret",
+          "eventos"
+        ],
+        "title": "WebhookConfigRequest"
+      },
+      "WebhookTestRequest": {
+        "properties": {
+          "evento": {
+            "type": "string",
+            "title": "Evento",
+            "default": "ALERTA_ALAGAMENTO"
+          },
+          "dados": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Dados"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dados"
+        ],
+        "title": "WebhookTestRequest"
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Logística & Roteamento Resiliente",
+      "description": "Simulação de impacto viário por alagamentos, previsão D-1 e roteamento de frotas sobre a malha PostGIS."
+    },
+    {
+      "name": "Relatórios & Auditoria Executiva",
+      "description": "Exportação tabular CSV em streaming e sumários consolidados de KPIs de resiliência e prejuízo evitado."
+    },
+    {
+      "name": "Webhooks Corporativos",
+      "description": "Assinatura HMAC-SHA256 e despacho assíncrono de eventos críticos de rota e alagamento para ERPs e TMSs."
+    },
+    {
+      "name": "Observabilidade & Quotas",
+      "description": "Telemetria de performance em tempo real, monitoramento de latência e governança de rate limit."
+    },
+    {
+      "name": "Healthchecks & Infraestrutura",
+      "description": "Sondas de vivacidade (liveness) e prontidão (readiness) com validação de conexão ativa na malha viária."
+    }
+  ]
+}

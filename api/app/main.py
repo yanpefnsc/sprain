@@ -14,12 +14,40 @@ async def lifespan(app: FastAPI):
     yield
     await close_db_pool()
 
+tags_metadata = [
+    {
+        "name": "Logística & Roteamento Resiliente",
+        "description": "Simulação de impacto viário por alagamentos, previsão D-1 e roteamento de frotas sobre a malha PostGIS."
+    },
+    {
+        "name": "Relatórios & Auditoria Executiva",
+        "description": "Exportação tabular CSV em streaming e sumários consolidados de KPIs de resiliência e prejuízo evitado."
+    },
+    {
+        "name": "Webhooks Corporativos",
+        "description": "Assinatura HMAC-SHA256 e despacho assíncrono de eventos críticos de rota e alagamento para ERPs e TMSs."
+    },
+    {
+        "name": "Observabilidade & Quotas",
+        "description": "Telemetria de performance em tempo real, monitoramento de latência e governança de rate limit."
+    },
+    {
+        "name": "Healthchecks & Infraestrutura",
+        "description": "Sondas de vivacidade (liveness) e prontidão (readiness) com validação de conexão ativa na malha viária."
+    }
+]
+
 app = FastAPI(
-    title="SPRain Geo-Engine B2B API",
-    version="2.0.0",
-    description="Inteligência Climática e Resiliência Operacional para Logística",
-    lifespan=lifespan
+    title="SPRain B2B - Climate Resilience & Logistics Intelligence API",
+    description="Plataforma corporativa de inteligência climática, predição de intransitabilidade urbana e roteamento dinâmico de frotas.",
+    version="1.0.0",
+    lifespan=lifespan,
+    openapi_tags=tags_metadata,
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json"
 )
+
 app.add_middleware(ObservabilidadeMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 
@@ -39,6 +67,7 @@ app.include_router(simulacao.router)
 app.include_router(relatorios.router)
 app.include_router(monitoramento.router)
 app.include_router(logistica.router)
+app.include_router(health.router)
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 static_dir = BASE_DIR / "static"
@@ -46,8 +75,6 @@ static_dir = BASE_DIR / "static"
 if static_dir.exists():
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
-@app.get("/health", tags=["Infraestrutura"])
+@app.get("/health", tags=["Healthchecks & Infraestrutura"])
 async def health_check():
     return {"status": "operacional", "modulo": "B2B Resilience Engine"}
-
-app.include_router(health.router)
