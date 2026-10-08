@@ -1,8 +1,10 @@
 import os
-import requests
+import json
+import urllib.request
 from sqlalchemy import create_engine, text
 
-URL_BANCO = os.getenv("URL_BANCO", "postgresql+psycopg2://enchentes:enchentes@localhost:5432/enchentes")
+# Usa sprain_db caso esteja no docker, ou localhost se fora
+URL_BANCO = os.getenv("URL_BANCO", "postgresql+psycopg2://enchentes:enchentes@sprain_db:5432/enchentes")
 
 COORDENADAS_SEGMENTOS = {
     1: {"nome": "Araraquara/Sao Carlos", "lat": -21.90, "lon": -48.03},
@@ -16,10 +18,11 @@ COORDENADAS_SEGMENTOS = {
 def consultar_precipitacao(lat, lon):
     url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=precipitation,rain&timezone=America%2FSao_Paulo"
     try:
-        resp = requests.get(url, timeout=10)
-        if resp.status_code == 200:
-            dados = resp.json().get("current", {})
-            return float(dados.get("precipitation", 0.0))
+        req = urllib.request.Request(url, headers={"User-Agent": "SPRain/1.2.3"})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            if resp.status == 200:
+                dados = json.loads(resp.read().decode("utf-8")).get("current", {})
+                return float(dados.get("precipitation", 0.0))
     except Exception as e:
         print(f"Aviso: Falha ao consultar coordenadas ({lat}, {lon}): {e}")
     return 0.0
