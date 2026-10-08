@@ -33,3 +33,18 @@ Sistema geoespacial integrado para mitigação de risco de enchentes, roteamento
 
 ```bash
 docker compose up --build -d
+## 🚀 Arquitetura Regional & Validação Científica (v1.2.0)
+
+### 📊 Comprovação Empírica do IVI (Índice de Vulnerabilidade a Alagamentos)
+Cruzamento espacial de eventos históricos registrados pela CGE contra a malha viária indexada:
+
+| Escopo Analisado | Amostra | IVI Médio | % Risco Alto / Crítico |
+| :--- | :--- | :--- | :--- |
+| **Malha Viária Geral** | 2.978 trechos | 48.7 | 46.3% |
+| **Trechos com Histórico de Alagamento** | Vias validadas | **63.0** | **66.7%** |
+
+### 🛣️ Roteamento Hierárquico em Dois Níveis (Macro & Micro)
+Para viabilizar escala estadual sem degradação de memória em consultas `pgRouting`:
+* **Camada Macro (Corredor Estruturante):** 245.0 km contínuos ligando Araraquara a São Paulo via SP-310 (Washington Luís), SP-330 (Anhanguera) e SP-348 (Bandeirantes).
+* **Camada Micro (Polígonos Urbanos Dinâmicos):** Extração sob demanda de eixos municipais (857 eixos estruturantes em Araraquara e malha metropolitana em São Paulo).
+* **Endpoint B2B:** `GET /api/v1/rotas/intermunicipal?origem=Araraquara&destino=Sao%20Paulo`
