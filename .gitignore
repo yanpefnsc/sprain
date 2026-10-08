@@ -11,3 +11,5 @@ cache/
 
 contexto_proximo_chat.txt
 diagnostico_projeto.txt
+
+!db/ci/*.sql
