@@ -196,41 +196,96 @@ async def calcular_rota(dados: RotaRequest, conn: asyncpg.Connection = Depends(g
     }
 
 
+
+
 @router.get("/intermunicipal", dependencies=[Depends(require_role(["ADMIN", "OPERATOR", "VIEWER"]))])
 async def calcular_rota_intermunicipal(
     origem: str = "Araraquara",
-    destino: str = "Sao Paulo (Itaquera)",
+    destino: str = "Sao Paulo",
+    custo_hora_veiculo: float = 150.0,
+    consumo_km_litro: float = 2.5,
+    preco_diesel_litro: float = 6.10,
     conn: asyncpg.Connection = Depends(get_connection)
 ):
     query_corredor = """
         SELECT 
-            id_trecho,
-            name,
-            ROUND((length / 1000.0)::numeric, 1) AS distancia_km,
-            ROUND(((length / 1000.0) / 80.0 * 60.0)::numeric, 1) AS tempo_estimado_min
-        FROM corredor_sp_araraquara
-        ORDER BY id_trecho;
+            r.id_trecho,
+            r.name,
+            ROUND((r.length / 1000.0)::numeric, 1) AS distancia_km,
+            ROUND(((r.length / 1000.0) / 80.0 * 60.0)::numeric, 1) AS tempo_nominal_min,
+            COALESCE(c.status_pista, 'LIBERADA') AS status_pista,
+            COALESCE(c.precipitacao_mm_h, 0.0) AS precipitacao_mm_h,
+            COALESCE(c.fator_atraso, 1.0) AS fator_atraso,
+            ROUND((((r.length / 1000.0) / 80.0 * 60.0) * COALESCE(c.fator_atraso, 1.0))::numeric, 1) AS tempo_real_min
+        FROM corredor_sp_araraquara r
+        LEFT JOIN condicoes_corredor c ON c.id_trecho = r.id_trecho
+        ORDER BY r.id_trecho;
     """
     segmentos = await conn.fetch(query_corredor)
     
     total_km = sum(float(s["distancia_km"]) for s in segmentos)
-    tempo_total_min = sum(float(s["tempo_estimado_min"]) for s in segmentos)
+    tempo_nominal_total = sum(float(s["tempo_nominal_min"]) for s in segmentos)
+    tempo_real_total = sum(float(s["tempo_real_min"]) for s in segmentos)
     
+    custo_diesel_km = preco_diesel_litro / consumo_km_litro
+    custo_minuto = custo_hora_veiculo / 60.0
+    
+    trechos_criticos = [s for s in segmentos if s["status_pista"] == "RISCO_CRITICO_ALAGAMENTO"]
+    alerta_meteorologico = len(trechos_criticos) > 0
+    
+    recomendacao = "MANTER_ROTA_PADRAO"
+    desvio_sugerido = None
+    decisao_economica = None
+    
+    if alerta_meteorologico:
+        adicional_km = 18.4
+        tempo_estimado_desvio = tempo_nominal_total + 15.0
+        economia_tempo = tempo_real_total - tempo_estimado_desvio
+        
+        custo_diesel_adicional = adicional_km * custo_diesel_km
+        economia_tempo_reais = economia_tempo * custo_minuto
+        beneficio_liquido = economia_tempo_reais - custo_diesel_adicional
+        
+        recomendacao = "DESVIO_RECOMENDADO" if beneficio_liquido > 0 else "AVALIAR_RETENCAO"
+        desvio_sugerido = {
+            "rota_alternativa": "Eixo SP-215 / SP-330 (Anhanguera via Descalvado / Porto Ferreira)",
+            "adicional_km": adicional_km,
+            "tempo_estimado_desvio_min": round(tempo_estimado_desvio, 1),
+            "economia_tempo_min": round(economia_tempo, 1),
+            "motivo": f"{len(trechos_criticos)} trecho(s) com risco critico de intransitabilidade na SP-310"
+        }
+        decisao_economica = {
+            "custo_diesel_extra_brl": round(custo_diesel_adicional, 2),
+            "economia_hora_parada_brl": round(economia_tempo_reais, 2),
+            "beneficio_liquido_brl": round(beneficio_liquido, 2),
+            "roi_decisao": "POSITIVO_ECONOMIA_COMPROVADA" if beneficio_liquido > 0 else "NEUTRO"
+        }
+        
     return {
-        "modalidade": "ROTEAMENTO_HIERARQUICO_INTERMUNICIPAL",
+        "modalidade": "ROTEAMENTO_PREDITIVO_COM_DECISAO_ECONOMICA",
         "origem": origem,
         "destino": destino,
         "resumo": {
             "distancia_total_km": round(total_km, 1),
-            "tempo_estimado_total_min": round(tempo_total_min, 1),
-            "eixos_principais": ["SP-310 (Washington Luis)", "SP-330 (Anhanguera)", "SP-348 (Bandeirantes)"]
+            "tempo_nominal_min": round(tempo_nominal_total, 1),
+            "tempo_real_estimado_min": round(tempo_real_total, 1),
+            "atraso_climatico_min": round(tempo_real_total - tempo_nominal_total, 1),
+            "status_geral": "ALERTA_CLIMATICO" if alerta_meteorologico else "CONDICOES_FAVORAVEIS"
         },
-        "segmentos_macro": [
+        "decisao_logistica": {
+            "recomendacao": recomendacao,
+            "desvio": desvio_sugerido,
+            "analise_financeira": decisao_economica
+        },
+        "segmentos": [
             {
-                "id_segmento": s["id_trecho"],
-                "descricao": s["name"],
+                "id": s["id_trecho"],
+                "nome": s["name"],
                 "distancia_km": float(s["distancia_km"]),
-                "tempo_min": float(s["tempo_estimado_min"])
+                "tempo_nominal_min": float(s["tempo_nominal_min"]),
+                "tempo_real_min": float(s["tempo_real_min"]),
+                "status": s["status_pista"],
+                "precipitacao_mm_h": float(s["precipitacao_mm_h"])
             } for s in segmentos
         ]
     }

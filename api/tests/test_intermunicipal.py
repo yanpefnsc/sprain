@@ -11,6 +11,7 @@ async def test_calculo_rota_intermunicipal_araraquara_sp():
         resp = await client.get("/intermunicipal", headers=HEADERS_ADMIN)
         assert resp.status_code == 200
         data = resp.json()
-        assert data["modalidade"] == "ROTEAMENTO_HIERARQUICO_INTERMUNICIPAL"
+        assert data["modalidade"] == "ROTEAMENTO_PREDITIVO_COM_DECISAO_ECONOMICA"
         assert data["resumo"]["distancia_total_km"] > 200.0
-        assert len(data["segmentos_macro"]) == 6
+        assert "decisao_logistica" in data
+        assert "analise_financeira" in data["decisao_logistica"]
