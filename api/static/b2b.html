@@ -1,0 +1,193 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SPRain • Centro de Resiliência Logística B2B</title>
+    <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+    <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { display: flex; height: 100vh; background: #0d1117; color: #c9d1d9; overflow: hidden; }
+        #sidebar { width: 520px; display: flex; flex-direction: column; background: #161b22; border-right: 1px solid #30363d; z-index: 10; }
+        .header { padding: 16px 20px; border-bottom: 1px solid #30363d; background: #0d1117; }
+        .header h1 { font-size: 1.1rem; color: #58a6ff; font-weight: 600; }
+        .header p { font-size: 0.8rem; color: #8b949e; margin-top: 4px; }
+        .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 14px 20px; border-bottom: 1px solid #30363d; }
+        .kpi-card { background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 10px; text-align: center; }
+        .kpi-val { font-size: 1.25rem; font-weight: 700; color: #f0f6fc; }
+        .kpi-lbl { font-size: 0.7rem; color: #8b949e; margin-top: 2px; text-transform: uppercase; }
+        .sim-control { padding: 12px 20px; display: flex; gap: 10px; align-items: center; border-bottom: 1px solid #30363d; background: #161b22; }
+        .sim-control select, .sim-control button { background: #21262d; border: 1px solid #30363d; color: #f0f6fc; padding: 6px 12px; border-radius: 6px; font-size: 0.85rem; outline: none; }
+        .sim-control button { background: #238636; border-color: #2ea043; cursor: pointer; font-weight: 500; }
+        .sim-control button:hover { background: #2ea043; }
+        #table-container { flex: 1; overflow-y: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+        th { position: sticky; top: 0; background: #0d1117; color: #8b949e; font-weight: 600; text-align: left; padding: 8px 12px; border-bottom: 1px solid #30363d; }
+        td { padding: 10px 12px; border-bottom: 1px solid #21262d; }
+        tr:hover { background: #1f242c; cursor: pointer; }
+        tr.active { background: #262c36; }
+        .badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-weight: 600; font-size: 0.7rem; }
+        .badge-CRITICO { background: #da3633; color: #fff; }
+        .badge-RISCO { background: #d29922; color: #161b22; }
+        #map { flex: 1; height: 100%; }
+        .legend { position: absolute; bottom: 24px; right: 24px; background: #161b22; border: 1px solid #30363d; padding: 12px; border-radius: 6px; font-size: 0.75rem; color: #c9d1d9; z-index: 5; }
+        .legend-item { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+        .legend-item:last-child { margin-bottom: 0; }
+        .legend-color { width: 16px; height: 4px; border-radius: 2px; }
+    </style>
+</head>
+<body>
+    <div id="sidebar">
+        <div class="header">
+            <h1>SPRain • Centro de Operações Logísticas</h1>
+            <p>Monitoramento e Resiliência Climática de Frota em Tempo Real</p>
+        </div>
+        <div class="kpis">
+            <div class="kpi-card">
+                <div class="kpi-val" id="kpi-afetadas">0</div>
+                <div class="kpi-lbl">Operações em Risco</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-val" id="kpi-custo">R$ 0</div>
+                <div class="kpi-lbl">Custo Desvio</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-val" id="kpi-evitado">R$ 0</div>
+                <div class="kpi-lbl">Prejuízo Preservado</div>
+            </div>
+        </div>
+        <div class="sim-control">
+            <span style="font-size:0.8rem; color:#8b949e;">Cenário:</span>
+            <select id="sel-chuva">
+                <option value="35">35 mm (Atenção)</option>
+                <option value="60">60 mm (Severo)</option>
+                <option value="85" selected>85 mm (Crítico)</option>
+                <option value="120">120 mm (Extremo)</option>
+            </select>
+            <button onclick="executarSimulacao()">Simular Impacto</button>
+        </div>
+        <div id="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Operação</th>
+                        <th>Veículo</th>
+                        <th>Risco</th>
+                        <th>Desvio</th>
+                        <th>Custo</th>
+                    </tr>
+                </thead>
+                <tbody id="grid-operacoes"></tbody>
+            </table>
+        </div>
+    </div>
+    <div id="map"></div>
+    <div class="legend">
+        <div class="legend-item"><div class="legend-color" style="background:#58a6ff;"></div> Rota Alternativa Resiliente</div>
+        <div class="legend-item"><div class="legend-color" style="background:#da3633;"></div> Trecho Bloqueado / Alagado</div>
+    </div>
+
+    <script>
+        const map = new maplibregl.Map({
+            container: 'map',
+            style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
+            center: [-46.468, -23.542],
+            zoom: 12.5
+        });
+
+        let recomendacoesAtuais = [];
+
+        map.on('load', () => {
+            map.addSource('rota-segura', {
+                type: 'geojson',
+                data: { type: 'FeatureCollection', features: [] }
+            });
+            map.addLayer({
+                id: 'layer-rota-segura',
+                type: 'line',
+                source: 'rota-segura',
+                layout: { 'line-join': 'round', 'line-cap': 'round' },
+                paint: { 'line-color': '#58a6ff', 'line-width': 5, 'line-opacity': 0.85 }
+            });
+            executarSimulacao();
+        });
+
+        async function executarSimulacao() {
+            const mm = parseFloat(document.getElementById('sel-chuva').value);
+            const tbody = document.getElementById('grid-operacoes');
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:#8b949e;">Calculando resiliência da malha...</td></tr>';
+
+            const res = await fetch('/api/v1/logistica/simular-impacto', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ precipitacao_mm: mm })
+            });
+            const data = await res.json();
+            recomendacoesAtuais = data.recomendacoes || [];
+
+            let custoTotal = 0;
+            let prejuizoTotal = 0;
+
+            tbody.innerHTML = '';
+            recomendacoesAtuais.forEach((rec, idx) => {
+                custoTotal += rec.impacto.custo_desvio_brl;
+                prejuizoTotal += rec.impacto.prejuizo_potencial_evitado_brl;
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td style="font-weight:600; color:#f0f6fc;">${rec.id_operacao}</td>
+                    <td>${rec.id_veiculo}</td>
+                    <td><span class="badge badge-${rec.nivel_risco}">${rec.nivel_risco}</span></td>
+                    <td>+${rec.impacto.km_adicionais} km (+${rec.impacto.minutos_adicionais}m)</td>
+                    <td>R$ ${rec.impacto.custo_desvio_brl.toFixed(2)}</td>
+                `;
+                tr.onclick = () => selecionarOperacao(idx, tr);
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('kpi-afetadas').innerText = recomendacoesAtuais.length;
+            document.getElementById('kpi-custo').innerText = `R$ ${custoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+            document.getElementById('kpi-evitado').innerText = `R$ ${prejuizoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+
+            if (recomendacoesAtuais.length > 0) {
+                selecionarOperacao(0, tbody.children[0]);
+            }
+        }
+
+        async function selecionarOperacao(idx, element) {
+            document.querySelectorAll('#grid-operacoes tr').forEach(r => r.classList.remove('active'));
+            if (element) element.classList.add('active');
+
+            const op = recomendacoesAtuais[idx];
+            if (!op) return;
+
+            const res = await fetch('/api/v1/logistica/operacoes');
+            const listaOps = await res.json();
+            const dadosOp = listaOps.find(o => o.id_operacao === op.id_operacao);
+
+            if (dadosOp) {
+                const resRota = await fetch('/api/v1/rotas/calcular', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        origem_lat: dadosOp.origem_lat,
+                        origem_lon: dadosOp.origem_lon,
+                        destino_lat: dadosOp.destino_lat,
+                        destino_lon: dadosOp.destino_lon
+                    })
+                });
+                const rotaData = await resRota.json();
+                if (rotaData.rota_geojson) {
+                    map.getSource('rota-segura').setData(rotaData.rota_geojson);
+                    const coords = rotaData.rota_geojson.features.flatMap(f => f.geometry.coordinates);
+                    if (coords.length > 0) {
+                        const bounds = coords.reduce((b, coord) => b.extend(coord), new maplibregl.LngLatBounds(coords[0], coords[0]));
+                        map.fitBounds(bounds, { padding: 80 });
+                    }
+                }
+            }
+        }
+    </script>
+</body>
+</html>

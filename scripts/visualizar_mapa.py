@@ -59,8 +59,8 @@ def main():
         <div><span style="background: #2b9348; width: 14px; height: 14px; display: inline-block; margin-right: 6px; border-radius: 2px;"></span><b>Baixo</b> (&lt; 30)</div>
     </div>
     """
-    mapa.get_root().html.add_child(folium.Element(legenda_html))
-
+    mapa.get_root().add_child(folium.Element(legenda_html))
+    
     caminho_mapa = "dados/processados/mapa_vulnerabilidade.html"
     mapa.save(caminho_mapa)
     print("Mapa limpo gerado com sucesso!")
