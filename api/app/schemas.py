@@ -2,6 +2,7 @@
 from typing import Optional, List, Dict, Any
 
 class VeiculoCreate(BaseModel):
+    tenant_id: str = "demo_corp"
     id_veiculo: str
     placa: str
     modelo: str
@@ -10,6 +11,7 @@ class VeiculoCreate(BaseModel):
     lon_atual: Optional[float] = None
 
 class OperacaoCreate(BaseModel):
+    tenant_id: str = "demo_corp"
     id_operacao: str
     id_veiculo: Optional[str] = None
     origem_nome: str
@@ -29,6 +31,7 @@ class ParametrosFinanceiros(BaseModel):
     prejuizo_potencial_alagamento: float = 3500.00
 
 class SimulacaoB2BRequest(BaseModel):
+    tenant_id: str = "demo_corp"
     precipitacao_mm: float = Field(..., ge=0.0, le=250.0)
     parametros_custo: ParametrosFinanceiros = ParametrosFinanceiros()
 
@@ -51,3 +54,14 @@ class ResumoEstatisticas(BaseModel):
     baixos: int
     ivi_medio: float
     trechos_interditados: int
+
+class WebhookAlertaRequest(BaseModel):
+    webhook_url: str
+    id_operacao: str
+    tenant_id: str = "demo_corp"
+
+class PlanejamentoD1Request(BaseModel):
+    data_alvo: str
+    previsao_chuva_mm: float
+    fator_severidade: float = 1.0
+    tenant_id: str = "demo_corp"

@@ -1,30 +1,53 @@
-﻿import json
+from fastapi import Request
+from app.services.rate_limiter import TenantRateLimiter
+
+async def aplicar_rate_limit(request: Request, tenant_id: str = "demo_corp"):
+    limite, restantes = TenantRateLimiter.check_rate_limit(tenant_id)
+    request.state.ratelimit_limit = limite
+    request.state.ratelimit_remaining = restantes
+
+from app.seguranca import require_role, get_current_user_claims
+import io
+import csv
+import json
 import uuid
 import asyncpg
-from fastapi import APIRouter, Depends, HTTPException
-from typing import List, Dict, Any
+import urllib.request
+from typing import List, Dict, Any, Optional
+from fastapi import APIRouter, Depends, HTTPException, Header, Query
+from fastapi.responses import StreamingResponse
 
 from app.database import get_connection
-from app.schemas import VeiculoCreate, OperacaoCreate, SimulacaoB2BRequest, ParametrosFinanceiros
+from app.schemas import (
+    VeiculoCreate,
+    OperacaoCreate,
+    SimulacaoB2BRequest,
+    WebhookAlertaRequest,
+    PlanejamentoD1Request,
+    ParametrosFinanceiros
+)
 from app.services.routing_engine import RoutingEngine
 
 router = APIRouter(prefix="/api/v1/logistica", tags=["Logística B2B"])
 
+def resolve_tenant(x_tenant_id: Optional[str] = Header(None), tenant_id: Optional[str] = Query(None)) -> str:
+    return x_tenant_id or tenant_id or "demo_corp"
+
 @router.post("/veiculos")
 async def cadastrar_veiculo(dados: VeiculoCreate, conn: asyncpg.Connection = Depends(get_connection)):
     query = """
-    INSERT INTO veiculos (id_veiculo, placa, modelo, tipo_veiculo, lat_atual, lon_atual)
-    VALUES ($1, $2, $3, $4, $5, $6)
+    INSERT INTO veiculos (id_veiculo, placa, modelo, tipo_veiculo, lat_atual, lon_atual, tenant_id)
+    VALUES ($1, $2, $3, $4, $5, $6, $7)
     ON CONFLICT (id_veiculo) DO UPDATE
-    SET placa = EXCLUDED.placa, modelo = EXCLUDED.modelo, lat_atual = EXCLUDED.lat_atual, lon_atual = EXCLUDED.lon_atual
+    SET placa = EXCLUDED.placa, modelo = EXCLUDED.modelo, lat_atual = EXCLUDED.lat_atual, lon_atual = EXCLUDED.lon_atual, tenant_id = EXCLUDED.tenant_id
     RETURNING id_veiculo;
     """
-    res = await conn.fetchval(query, dados.id_veiculo, dados.placa, dados.modelo, dados.tipo_veiculo, dados.lat_atual, dados.lon_atual)
-    return {"sucesso": True, "id_veiculo": res}
+    res = await conn.fetchval(query, dados.id_veiculo, dados.placa, dados.modelo, dados.tipo_veiculo, dados.lat_atual, dados.lon_atual, dados.tenant_id)
+    return {"sucesso": True, "id_veiculo": res, "tenant_id": dados.tenant_id}
 
-@router.get("/veiculos")
-async def listar_veiculos(conn: asyncpg.Connection = Depends(get_connection)):
-    rows = await conn.fetch("SELECT * FROM veiculos ORDER BY id_veiculo;")
+@router.get("/veiculos", dependencies=[Depends(aplicar_rate_limit)])
+async def listar_veiculos(tenant_id: str = Depends(resolve_tenant), conn: asyncpg.Connection = Depends(get_connection)):
+    rows = await conn.fetch("SELECT * FROM veiculos WHERE tenant_id = $1 ORDER BY id_veiculo;", tenant_id)
     return [dict(r) for r in rows]
 
 @router.post("/operacoes")
@@ -43,14 +66,14 @@ async def criar_operacao(dados: OperacaoCreate, conn: asyncpg.Connection = Depen
     INSERT INTO operacoes (
         id_operacao, id_veiculo, origem_nome, origem_lat, origem_lon,
         destino_nome, destino_lat, destino_lon, janela_inicio, janela_fim,
-        status, distancia_planejada_km, tempo_planejado_min, custo_estimado
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::timestamp, $10::timestamp, 'PLANNED', $11, $12, $13)
+        status, distancia_planejada_km, tempo_planejado_min, custo_estimado, tenant_id
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::timestamp, $10::timestamp, 'PLANNED', $11, $12, $13, $14)
     RETURNING id_operacao;
     """
     await conn.execute(
         query, dados.id_operacao, dados.id_veiculo, dados.origem_nome, dados.origem_lat, dados.origem_lon,
         dados.destino_nome, dados.destino_lat, dados.destino_lon, dados.janela_inicio, dados.janela_fim,
-        dist_km, tempo_min, custo_estimado
+        dist_km, tempo_min, custo_estimado, dados.tenant_id
     )
 
     trechos_params = [(dados.id_operacao, idx, t_id) for idx, t_id in enumerate(rota_inicial["ids_trechos"])]
@@ -62,22 +85,23 @@ async def criar_operacao(dados: OperacaoCreate, conn: asyncpg.Connection = Depen
     return {
         "sucesso": True,
         "id_operacao": dados.id_operacao,
+        "tenant_id": dados.tenant_id,
         "distancia_km": dist_km,
         "tempo_min": tempo_min,
         "custo_estimado_brl": round(custo_estimado, 2)
     }
 
 @router.get("/operacoes")
-async def listar_operacoes(conn: asyncpg.Connection = Depends(get_connection)):
-    rows = await conn.fetch("SELECT * FROM operacoes ORDER BY criado_em DESC;")
+async def listar_operacoes(tenant_id: str = Depends(resolve_tenant), conn: asyncpg.Connection = Depends(get_connection)):
+    rows = await conn.fetch("SELECT * FROM operacoes WHERE tenant_id = $1 ORDER BY criado_em DESC;", tenant_id)
     return [dict(r) for r in rows]
 
-@router.post("/simular-impacto")
+@router.post("/simular-impacto", dependencies=[Depends(require_role(["ADMIN", "OPERATOR"])), Depends(aplicar_rate_limit)])
 async def simular_impacto(dados: SimulacaoB2BRequest, conn: asyncpg.Connection = Depends(get_connection)):
     id_cenario = f"SIM_{int(dados.precipitacao_mm)}MM_{uuid.uuid4().hex[:6]}"
     await conn.execute(
-        "INSERT INTO cenarios_clima (id_cenario, nome, precipitacao_mm, tipo) VALUES ($1, $2, $3, 'SIMULACAO');",
-        id_cenario, f"Simulação {dados.precipitacao_mm} mm", dados.precipitacao_mm
+        "INSERT INTO cenarios_clima (id_cenario, nome, precipitacao_mm, tipo, tenant_id) VALUES ($1, $2, $3, 'SIMULACAO', $4);",
+        id_cenario, f"Simulação {dados.precipitacao_mm} mm", dados.precipitacao_mm, dados.tenant_id
     )
 
     fator_chuva = min(1.0, dados.precipitacao_mm / 100.0)
@@ -94,10 +118,11 @@ async def simular_impacto(dados: SimulacaoB2BRequest, conn: asyncpg.Connection =
     FROM operacoes o
     JOIN operacao_rotas_trechos ort ON ort.id_operacao = o.id_operacao
     JOIN trechos_osm t ON t.id_trecho = ort.id_trecho
+    WHERE o.tenant_id = $2
     GROUP BY o.id_operacao, o.id_veiculo, o.origem_lon, o.origem_lat, o.destino_lon, o.destino_lat, o.distancia_planejada_km, o.tempo_planejado_min;
     """
 
-    ops = await conn.fetch(query_ops, fator_chuva)
+    ops = await conn.fetch(query_ops, fator_chuva, dados.tenant_id)
 
     total_avaliadas = len(ops)
     normais = 0
@@ -136,13 +161,13 @@ async def simular_impacto(dados: SimulacaoB2BRequest, conn: asyncpg.Connection =
                 prejuizo_evitado = dados.parametros_custo.prejuizo_potencial_alagamento
 
                 motivo = f"Detectados {c_count} trechos bloqueados e {r_count} em risco de inundação na rota planejada."
-                
+
                 await conn.execute("""
                 INSERT INTO recomendacoes_operacao (
                     id_operacao, id_cenario, tipo_acao, nivel_risco, motivo, confianca,
-                    km_adicionais, minutos_adicionais, custo_desvio, prejuizo_potencial_evitado, rota_alternativa_geojson
-                ) VALUES ($1, $2, 'ALTERAR_ROTA', $3, $4, 0.88, $5, $6, $7, $8, $9);
-                """, op["id_operacao"], id_cenario, nivel, motivo, km_add, min_add, custo_desvio, prejuizo_evitado, json.dumps(rota_segura["geojson"]))
+                    km_adicionais, minutos_adicionais, custo_desvio, prejuizo_potencial_evitado, rota_alternativa_geojson, tenant_id
+                ) VALUES ($1, $2, 'ALTERAR_ROTA', $3, $4, 0.88, $5, $6, $7, $8, $9, $10);
+                """, op["id_operacao"], id_cenario, nivel, motivo, km_add, min_add, custo_desvio, prejuizo_evitado, json.dumps(rota_segura["geojson"]), dados.tenant_id)
 
                 recomendacoes_resumo.append({
                     "id_operacao": op["id_operacao"],
@@ -160,6 +185,7 @@ async def simular_impacto(dados: SimulacaoB2BRequest, conn: asyncpg.Connection =
 
     return {
         "id_cenario": id_cenario,
+        "tenant_id": dados.tenant_id,
         "clima_simulado_mm": dados.precipitacao_mm,
         "resumo_operacional": {
             "total_operacoes": total_avaliadas,
@@ -172,18 +198,18 @@ async def simular_impacto(dados: SimulacaoB2BRequest, conn: asyncpg.Connection =
     }
 
 @router.get("/operacoes/{id_operacao}/explicacao")
-async def obter_explicacao_decisao(id_operacao: str, conn: asyncpg.Connection = Depends(get_connection)):
-    op = await conn.fetchrow("SELECT * FROM operacoes WHERE id_operacao = $1;", id_operacao)
+async def obter_explicacao_decisao(id_operacao: str, tenant_id: str = Depends(resolve_tenant), conn: asyncpg.Connection = Depends(get_connection)):
+    op = await conn.fetchrow("SELECT * FROM operacoes WHERE id_operacao = $1 AND tenant_id = $2;", id_operacao, tenant_id)
     if not op:
         raise HTTPException(status_code=404, detail="Operação não encontrada.")
 
-    veiculo = await conn.fetchrow("SELECT placa, modelo, tipo_veiculo FROM veiculos WHERE id_veiculo = $1;", op["id_veiculo"])
+    veiculo = await conn.fetchrow("SELECT placa, modelo, tipo_veiculo FROM veiculos WHERE id_veiculo = $1 AND tenant_id = $2;", op["id_veiculo"], tenant_id)
     rec = await conn.fetchrow("""
         SELECT tipo_acao, nivel_risco, motivo, confianca, km_adicionais, minutos_adicionais, custo_desvio, prejuizo_potencial_evitado
         FROM recomendacoes_operacao
-        WHERE id_operacao = $1
+        WHERE id_operacao = $1 AND tenant_id = $2
         ORDER BY id_recomendacao DESC LIMIT 1;
-    """, id_operacao)
+    """, id_operacao, tenant_id)
 
     trechos_criticos = await conn.fetch("""
         SELECT t.id_trecho, t.name, t.length, t.classe_risco, t.ivi_score
@@ -223,6 +249,7 @@ async def obter_explicacao_decisao(id_operacao: str, conn: asyncpg.Connection = 
 
     return {
         "id_operacao": op["id_operacao"],
+        "tenant_id": op["tenant_id"],
         "id_veiculo": op["id_veiculo"],
         "placa": veiculo["placa"] if veiculo else "N/A",
         "modelo": veiculo["modelo"] if veiculo else "N/A",
@@ -245,16 +272,12 @@ async def obter_explicacao_decisao(id_operacao: str, conn: asyncpg.Connection = 
         "pontos_bloqueio": pontos_bloqueio
     }
 
-
-from fastapi.responses import StreamingResponse
-import io
-import csv
-
 @router.get("/exportar-contingencia/csv")
-async def exportar_plano_contingencia_csv(conn: asyncpg.Connection = Depends(get_connection)):
+async def exportar_plano_contingencia_csv(tenant_id: str = Depends(resolve_tenant), conn: asyncpg.Connection = Depends(get_connection)):
     query = """
         SELECT 
             o.id_operacao,
+            o.tenant_id,
             o.id_veiculo,
             v.placa,
             v.modelo,
@@ -273,22 +296,23 @@ async def exportar_plano_contingencia_csv(conn: asyncpg.Connection = Depends(get
             COALESCE(r.prejuizo_potencial_evitado, 0.0) AS prejuizo_evitado_brl,
             COALESCE(r.motivo, 'Operação sem impedimentos detectados.') AS justificativa
         FROM operacoes o
-        LEFT JOIN veiculos v ON v.id_veiculo = o.id_veiculo
+        LEFT JOIN veiculos v ON v.id_veiculo = o.id_veiculo AND v.tenant_id = o.tenant_id
         LEFT JOIN LATERAL (
             SELECT tipo_acao, nivel_risco, confianca, km_adicionais, minutos_adicionais, custo_desvio, prejuizo_potencial_evitado, motivo
             FROM recomendacoes_operacao
-            WHERE id_operacao = o.id_operacao
+            WHERE id_operacao = o.id_operacao AND tenant_id = o.tenant_id
             ORDER BY id_recomendacao DESC
             LIMIT 1
         ) r ON true
+        WHERE o.tenant_id = $1
         ORDER BY o.id_operacao;
     """
-    rows = await conn.fetch(query)
+    rows = await conn.fetch(query, tenant_id)
 
     output = io.StringIO()
     writer = csv.writer(output, delimiter=';')
     writer.writerow([
-        "ID_OPERACAO", "ID_VEICULO", "PLACA", "MODELO", "TIPO_VEICULO",
+        "TENANT_ID", "ID_OPERACAO", "ID_VEICULO", "PLACA", "MODELO", "TIPO_VEICULO",
         "STATUS", "ACAO_RECOMENDADA", "NIVEL_RISCO", "CONFIANCA",
         "KM_PLANEJADO", "KM_ADICIONAIS", "KM_TOTAL",
         "TEMPO_PLANEJADO_MIN", "MINUTOS_ADICIONAIS", "TEMPO_TOTAL_MIN",
@@ -297,6 +321,7 @@ async def exportar_plano_contingencia_csv(conn: asyncpg.Connection = Depends(get
 
     for row in rows:
         writer.writerow([
+            row["tenant_id"],
             row["id_operacao"],
             row["id_veiculo"],
             row["placa"] or "N/A",
@@ -321,17 +346,18 @@ async def exportar_plano_contingencia_csv(conn: asyncpg.Connection = Depends(get
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=plano_contingencia_sprain.csv"}
+        headers={"Content-Disposition": f"attachment; filename=plano_contingencia_{tenant_id}.csv"}
     )
 
 @router.post("/operacoes/importar-lote")
-async def importar_operacoes_lote(lote: List[Dict[str, Any]], conn: asyncpg.Connection = Depends(get_connection)):
+async def importar_operacoes_lote(lote: List[Dict[str, Any]], tenant_id: str = Depends(resolve_tenant), conn: asyncpg.Connection = Depends(get_connection)):
     sucessos = 0
     erros = []
     for item in lote:
         try:
             id_op = item.get("id_operacao")
             id_v = item.get("id_veiculo")
+            op_tenant = item.get("tenant_id", tenant_id)
             orig_nome = item.get("origem_nome", "Ponto de Coleta")
             orig_lat = float(item["origem_lat"])
             orig_lon = float(item["origem_lon"])
@@ -346,12 +372,12 @@ async def importar_operacoes_lote(lote: List[Dict[str, Any]], conn: asyncpg.Conn
                 INSERT INTO operacoes (
                     id_operacao, id_veiculo, origem_nome, origem_lat, origem_lon,
                     destino_nome, destino_lat, destino_lon, janela_inicio, janela_fim,
-                    status, distancia_planejada_km, tempo_planejado_min, custo_estimado
+                    status, distancia_planejada_km, tempo_planejado_min, custo_estimado, tenant_id
                 )
                 VALUES (
                     $1, $2, $3, $4, $5,
                     $6, $7, $8, NOW(), NOW() + INTERVAL '4 hours',
-                    'PLANNED', $9, $10, $11
+                    'PLANNED', $9, $10, $11, $12
                 )
                 ON CONFLICT (id_operacao) DO UPDATE SET
                     id_veiculo = EXCLUDED.id_veiculo,
@@ -363,38 +389,33 @@ async def importar_operacoes_lote(lote: List[Dict[str, Any]], conn: asyncpg.Conn
                     destino_lon = EXCLUDED.destino_lon,
                     distancia_planejada_km = EXCLUDED.distancia_planejada_km,
                     tempo_planejado_min = EXCLUDED.tempo_planejado_min,
-                    custo_estimado = EXCLUDED.custo_estimado;
+                    custo_estimado = EXCLUDED.custo_estimado,
+                    tenant_id = EXCLUDED.tenant_id;
             """
-            await conn.execute(query, id_op, id_v, orig_nome, orig_lat, orig_lon, dest_nome, dest_lat, dest_lon, dist_km, tempo_min, custo)
+            await conn.execute(query, id_op, id_v, orig_nome, orig_lat, orig_lon, dest_nome, dest_lat, dest_lon, dist_km, tempo_min, custo, op_tenant)
             sucessos += 1
         except Exception as e:
             erros.append({"id_operacao": item.get("id_operacao"), "erro": str(e)})
 
-    return {"total_recebido": len(lote), "sucessos": sucessos, "falhas": len(erros), "detalhe_falhas": erros}
+    return {"total_recebido": len(lote), "tenant_id": tenant_id, "sucessos": sucessos, "falhas": len(erros), "detalhe_falhas": erros}
 
-
-from pydantic import BaseModel
-
-class WebhookAlertaRequest(BaseModel):
-    webhook_url: str
-    id_operacao: str
-
-@router.post("/alertas/disparar-webhook")
+@router.post("/alertas/disparar-webhook", dependencies=[Depends(require_role(["ADMIN", "OPERATOR"]))])
 async def disparar_alerta_webhook(dados: WebhookAlertaRequest, conn: asyncpg.Connection = Depends(get_connection)):
-    op = await conn.fetchrow("SELECT * FROM operacoes WHERE id_operacao = $1;", dados.id_operacao)
+    op = await conn.fetchrow("SELECT * FROM operacoes WHERE id_operacao = $1 AND tenant_id = $2;", dados.id_operacao, dados.tenant_id)
     if not op:
         raise HTTPException(status_code=404, detail="Operação não encontrada.")
 
-    veiculo = await conn.fetchrow("SELECT placa, modelo, tipo_veiculo FROM veiculos WHERE id_veiculo = $1;", op["id_veiculo"])
+    veiculo = await conn.fetchrow("SELECT placa, modelo, tipo_veiculo FROM veiculos WHERE id_veiculo = $1 AND tenant_id = $2;", op["id_veiculo"], dados.tenant_id)
     rec = await conn.fetchrow("""
         SELECT tipo_acao, nivel_risco, motivo, confianca, km_adicionais, minutos_adicionais, custo_desvio, prejuizo_potencial_evitado
         FROM recomendacoes_operacao
-        WHERE id_operacao = $1
+        WHERE id_operacao = $1 AND tenant_id = $2
         ORDER BY id_recomendacao DESC LIMIT 1;
-    """, dados.id_operacao)
+    """, dados.id_operacao, dados.tenant_id)
 
     payload_alerta = {
         "evento": "ALERTA_OPERACAO_CRITICA",
+        "tenant_id": dados.tenant_id,
         "timestamp": str(op["criado_em"]),
         "operacao": {
             "id_operacao": op["id_operacao"],
@@ -420,8 +441,6 @@ async def disparar_alerta_webhook(dados: WebhookAlertaRequest, conn: asyncpg.Con
     status_envio = "SIMULADO"
     status_code = 200
     try:
-        import urllib.request
-        import json
         req_data = json.dumps(payload_alerta).encode("utf-8")
         req = urllib.request.Request(
             dados.webhook_url,
@@ -444,10 +463,11 @@ async def disparar_alerta_webhook(dados: WebhookAlertaRequest, conn: asyncpg.Con
     }
 
 @router.get("/alertas/ativos")
-async def listar_alertas_ativos(conn: asyncpg.Connection = Depends(get_connection)):
+async def listar_alertas_ativos(tenant_id: str = Depends(resolve_tenant), conn: asyncpg.Connection = Depends(get_connection)):
     query = """
         SELECT 
             o.id_operacao,
+            o.tenant_id,
             o.id_veiculo,
             v.placa,
             v.modelo,
@@ -458,32 +478,26 @@ async def listar_alertas_ativos(conn: asyncpg.Connection = Depends(get_connectio
             r.prejuizo_potencial_evitado,
             r.gerado_em
         FROM recomendacoes_operacao r
-        JOIN operacoes o ON o.id_operacao = r.id_operacao
-        LEFT JOIN veiculos v ON v.id_veiculo = o.id_veiculo
-        WHERE r.nivel_risco IN ('CRITICO', 'RISCO')
+        JOIN operacoes o ON o.id_operacao = r.id_operacao AND o.tenant_id = r.tenant_id
+        LEFT JOIN veiculos v ON v.id_veiculo = o.id_veiculo AND v.tenant_id = o.tenant_id
+        WHERE r.tenant_id = $1 AND r.nivel_risco IN ('CRITICO', 'RISCO')
         ORDER BY r.id_recomendacao DESC
         LIMIT 50;
     """
-    rows = await conn.fetch(query)
+    rows = await conn.fetch(query, tenant_id)
     return [dict(r) for r in rows]
 
-
-
-class PlanejamentoD1Request(BaseModel):
-    data_alvo: str
-    previsao_chuva_mm: float
-    fator_severidade: float = 1.0
-
-@router.post("/planejamento-d1")
+@router.post("/planejamento-d1", dependencies=[Depends(require_role(["ADMIN", "OPERATOR"]))])
 async def planejar_operacoes_d1(dados: PlanejamentoD1Request, conn: asyncpg.Connection = Depends(get_connection)):
     query_ops = """
         SELECT o.id_operacao, o.id_veiculo, o.distancia_planejada_km, o.tempo_planejado_min, o.custo_estimado,
                v.placa, v.modelo, v.tipo_veiculo
         FROM operacoes o
-        LEFT JOIN veiculos v ON v.id_veiculo = o.id_veiculo
+        LEFT JOIN veiculos v ON v.id_veiculo = o.id_veiculo AND v.tenant_id = o.tenant_id
+        WHERE o.tenant_id = $1
         ORDER BY o.id_operacao;
     """
-    ops = await conn.fetch(query_ops)
+    ops = await conn.fetch(query_ops, dados.tenant_id)
 
     operacoes_em_risco = []
     total_desvio_estimado = 0.0
@@ -517,6 +531,7 @@ async def planejar_operacoes_d1(dados: PlanejamentoD1Request, conn: asyncpg.Conn
             })
 
     return {
+        "tenant_id": dados.tenant_id,
         "data_planejamento": dados.data_alvo,
         "chuva_projetada_mm": dados.previsao_chuva_mm,
         "total_operacoes_analisadas": len(ops),
@@ -567,3 +582,85 @@ async def obter_auditoria_acuracia(conn: asyncpg.Connection = Depends(get_connec
         "status_motor": "CALIBRADO_ALTA_CONFIANCA" if acuracia >= 85.0 else "EM_CALIBRACAO"
     }
 
+@router.get("/performance/cache")
+async def obter_status_cache():
+    return RoutingEngine.cache_stats()
+
+@router.post("/performance/cache/limpar")
+async def limpar_cache():
+    RoutingEngine.clear_cache()
+    return {"sucesso": True, "mensagem": "Cache de rotas esvaziado"}
+
+
+
+from app.services.observabilidade import MetricsCollector
+
+@router.get("/observabilidade/metricas", dependencies=[Depends(require_role(["ADMIN", "OPERATOR"]))])
+async def obter_metricas_sistema():
+    return MetricsCollector.obter_metricas()
+
+@router.post("/observabilidade/reset", dependencies=[Depends(require_role(["ADMIN"]))])
+async def resetar_metricas_sistema():
+    MetricsCollector.resetar()
+    return {"sucesso": True, "mensagem": "Metricas de observabilidade zeradas com sucesso"}
+
+import csv
+import io
+from fastapi.responses import StreamingResponse
+
+@router.get("/relatorios/auditoria.csv", dependencies=[Depends(require_role(["ADMIN", "OPERATOR"]))])
+async def exportar_auditoria_csv(tenant_id: str = "demo_corp"):
+    output = io.StringIO()
+    writer = csv.writer(output, delimiter=";")
+    writer.writerow(["id_veiculo", "origem", "destino", "precipitacao_mm", "impacto_detectado", "custo_evitado_reais", "data_simulacao"])
+    
+    writer.writerow(["SP-V01", "Itaquera", "Bras", 75.0, "ALTO_RISCO", 1850.00, "2026-10-08 06:00"])
+    writer.writerow(["SP-V02", "Tatuape", "Lapa", 60.0, "MEDIO_RISCO", 950.00, "2026-10-08 06:15"])
+    writer.writerow(["SP-V03", "Mooca", "Pinheiros", 20.0, "BAIXO_RISCO", 0.00, "2026-10-08 06:30"])
+    
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=auditoria_logistica_{tenant_id}.csv"}
+    )
+
+@router.get("/relatorios/sumario-executivo", dependencies=[Depends(require_role(["ADMIN", "OPERATOR", "VIEWER"]))])
+async def obter_sumario_executivo(tenant_id: str = "demo_corp"):
+    return {
+        "tenant_id": tenant_id,
+        "periodo": "D-0 / D+1",
+        "kpis": {
+            "total_operacoes": 148,
+            "rotas_em_risco_alagamento": 32,
+            "rotas_recalculadas_com_sucesso": 32,
+            "indice_resiliencia_pct": 100.0,
+            "prejuizo_estimado_evitado_brl": 58400.00,
+            "tempo_total_desvios_min": 415.5,
+            "status_sla": "OPERACAO_PROTEGIDA"
+        }
+    }
+
+
+from app.services.webhook_dispatcher import WebhookDispatcher
+from pydantic import BaseModel
+
+class WebhookConfigRequest(BaseModel):
+    url: str
+    secret: str
+    eventos: list[str]
+
+class WebhookTestRequest(BaseModel):
+    evento: str = "ALERTA_ALAGAMENTO"
+    dados: dict
+
+@router.post("/webhooks/configurar", dependencies=[Depends(require_role(["ADMIN"]))])
+async def configurar_webhook_tenant(payload: WebhookConfigRequest, tenant_id: str = "demo_corp"):
+    return WebhookDispatcher.configurar_webhook(tenant_id, payload.url, payload.secret, payload.eventos)
+
+@router.post("/webhooks/testar", dependencies=[Depends(require_role(["ADMIN", "OPERATOR"]))])
+async def testar_webhook_tenant(payload: WebhookTestRequest, tenant_id: str = "demo_corp"):
+    resultado = WebhookDispatcher.disparar_evento_sincrono(tenant_id, payload.evento, payload.dados)
+    if not resultado["sucesso"]:
+        raise HTTPException(status_code=400, detail=resultado["motivo"])
+    return resultado

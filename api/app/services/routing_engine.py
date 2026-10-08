@@ -1,124 +1,147 @@
-﻿import json
+﻿import time
+import json
 import asyncpg
-from typing import Dict, Any, Optional
-
-SQL_VERTICE = """
-SELECT v.id
-FROM trechos_osm_vertices_pgr v
-ORDER BY v.the_geom <-> ST_Transform(ST_SetSRID(ST_MakePoint($1, $2), 4326), 31983)
-LIMIT 1;
-"""
+from typing import Dict, Any, Optional, Tuple
 
 class RoutingEngine:
-    @staticmethod
-    def build_edge_query(profile: str, rain_mm: float) -> str:
-        if profile == "FASTEST":
-            cost_exp = "ST_Length(t.geom) / CASE WHEN t.highway IN ('primary', 'trunk') THEN 40.0 WHEN t.highway IN ('secondary', 'tertiary') THEN 30.0 ELSE 20.0 END"
-            return f"""SELECT t.id_trecho AS id, t.source::bigint, t.target::bigint, {cost_exp} AS cost, {cost_exp} AS reverse_cost FROM trechos_osm t WHERE t.source IS NOT NULL AND t.target IS NOT NULL"""
-        
-        if profile == "SHORTEST":
-            return """SELECT t.id_trecho AS id, t.source::bigint, t.target::bigint, ST_Length(t.geom) AS cost, ST_Length(t.geom) AS reverse_cost FROM trechos_osm t WHERE t.source IS NOT NULL AND t.target IS NOT NULL"""
-
-        fator_chuva = min(1.0, rain_mm / 100.0)
-        
-        if profile == "SAFEST":
-            mult_critico = "5000.0"
-            mult_risco = "100.0"
-            mult_atencao = "10.0"
-        else:
-            mult_critico = "1000.0"
-            mult_risco = "25.0"
-            mult_atencao = "4.0"
-
-        cost_case = f"""
-        CASE 
-            WHEN (COALESCE(t.ivi_score, 0.0) * (0.6 + 0.6 * {fator_chuva})) >= 80.0 THEN ST_Length(t.geom) * {mult_critico}
-            WHEN (COALESCE(t.ivi_score, 0.0) * (0.6 + 0.6 * {fator_chuva})) >= 60.0 THEN ST_Length(t.geom) * {mult_risco}
-            WHEN (COALESCE(t.ivi_score, 0.0) * (0.6 + 0.6 * {fator_chuva})) >= 40.0 THEN ST_Length(t.geom) * {mult_atencao}
-            ELSE ST_Length(t.geom)
-        END
-        """
-        return f"""SELECT t.id_trecho AS id, t.source::bigint, t.target::bigint, {cost_case} AS cost, {cost_case} AS reverse_cost FROM trechos_osm t WHERE t.source IS NOT NULL AND t.target IS NOT NULL"""
+    _cache: Dict[str, Tuple[float, Dict[str, Any]]] = {}
+    _cache_ttl_seconds: float = 300.0
+    _max_cache_size: int = 5000
 
     @classmethod
-    async def compute_route(cls, conn: asyncpg.Connection, orig_lon: float, orig_lat: float, dest_lon: float, dest_lat: float, profile: str = "BALANCED", rain_mm: float = 0.0) -> Optional[Dict[str, Any]]:
-        v_orig = await conn.fetchval(SQL_VERTICE, orig_lon, orig_lat)
-        v_dest = await conn.fetchval(SQL_VERTICE, dest_lon, dest_lat)
+    def _make_cache_key(cls, orig_lon: float, orig_lat: float, dest_lon: float, dest_lat: float, profile: str, rain_mm: float) -> str:
+        return f"{round(orig_lon, 5)}:{round(orig_lat, 5)}_{round(dest_lon, 5)}:{round(dest_lat, 5)}_{profile}_{round(rain_mm, 1)}"
 
-        if not v_orig or not v_dest or v_orig == v_dest:
+    @classmethod
+    def _get_from_cache(cls, key: str) -> Optional[Dict[str, Any]]:
+        agora = time.time()
+        if key in cls._cache:
+            timestamp, data = cls._cache[key]
+            if agora - timestamp < cls._cache_ttl_seconds:
+                return data
+            del cls._cache[key]
+        return None
+
+    @classmethod
+    def _set_cache(cls, key: str, data: Dict[str, Any]):
+        if len(cls._cache) >= cls._max_cache_size:
+            antigos = sorted(cls._cache.keys(), key=lambda k: cls._cache[k][0])[:500]
+            for k in antigos:
+                cls._cache.pop(k, None)
+        cls._cache[key] = (time.time(), data)
+
+    @classmethod
+    async def compute_route(
+        cls,
+        conn: asyncpg.Connection,
+        orig_lon: float,
+        orig_lat: float,
+        dest_lon: float,
+        dest_lat: float,
+        profile: str = "FASTEST",
+        rain_mm: float = 0.0
+    ) -> Optional[Dict[str, Any]]:
+        cache_key = cls._make_cache_key(orig_lon, orig_lat, dest_lon, dest_lat, profile, rain_mm)
+        cached_result = cls._get_from_cache(cache_key)
+        if cached_result is not None:
+            return cached_result
+
+        vert_query = """
+        SELECT id FROM trechos_osm_vertices_pgr
+        ORDER BY the_geom <-> ST_Transform(ST_SetSRID(ST_Point($1, $2), 4326), ST_SRID(the_geom))
+        LIMIT 1;
+        """
+        orig_vert = await conn.fetchval(vert_query, orig_lon, orig_lat)
+        dest_vert = await conn.fetchval(vert_query, dest_lon, dest_lat)
+
+        if not orig_vert or not dest_vert or orig_vert == dest_vert:
             return None
 
-        sql_edges = cls.build_edge_query(profile, rain_mm)
         fator_chuva = min(1.0, rain_mm / 100.0)
 
-        query = f"""
-        WITH dijkstra AS (
-            SELECT seq, edge, cost
-            FROM pgr_dijkstra('{sql_edges}', $1::bigint, $2::bigint, directed := false)
-            WHERE edge != -1
-        ),
-        rota AS (
-            SELECT 
-                d.seq, 
-                t.id_trecho, 
-                t.name, 
-                t.geom, 
-                t.highway, 
-                ST_Length(t.geom) AS comp_m,
-                COALESCE(t.ivi_score, 0.0) as ivi_base,
-                (COALESCE(t.ivi_score, 0.0) * (0.6 + 0.6 * {fator_chuva})) AS dynamic_score,
-                CASE 
-                    WHEN t.highway IN ('primary', 'trunk') THEN 40.0
-                    WHEN t.highway IN ('secondary', 'tertiary') THEN 30.0
-                    ELSE 20.0
-                END AS vel_kmh
-            FROM dijkstra d
-            JOIN trechos_osm t ON t.id_trecho = d.edge
-        )
+        if profile == "SAFEST":
+            cost_sql = f"""
+            CASE 
+                WHEN (COALESCE(t.ivi_score, 0.0) * (0.6 + 0.6 * {fator_chuva})) >= 80.0 THEN -1
+                WHEN (COALESCE(t.ivi_score, 0.0) * (0.6 + 0.6 * {fator_chuva})) >= 60.0 THEN t.length * 15.0
+                ELSE t.length * (1.0 + (COALESCE(t.ivi_score, 0.0) / 10.0))
+            END
+            """
+        elif profile == "BALANCED":
+            cost_sql = f"""
+            t.length * (1.0 + ((COALESCE(t.ivi_score, 0.0) * (0.5 + 0.5 * {fator_chuva})) / 20.0))
+            """
+        elif profile == "SHORTEST":
+            cost_sql = "t.length"
+        else:
+            cost_sql = "t.length / NULLIF(COALESCE(t.speed_kph, 40.0), 0.0)"
+
+        pgr_query = f"""
         SELECT 
-            json_build_object(
-                'type', 'FeatureCollection',
-                'features', COALESCE(
-                    json_agg(
-                        json_build_object(
-                            'type', 'Feature',
-                            'geometry', ST_AsGeoJSON(ST_Transform(r.geom, 4326))::json,
-                            'properties', json_build_object(
-                                'id_trecho', r.id_trecho,
-                                'nome', r.name,
-                                'ivi_dinamico', ROUND(r.dynamic_score::numeric, 1),
-                                'comprimento_m', ROUND(r.comp_m::numeric, 2)
-                            )
-                        ) ORDER BY r.seq
-                    ), '[]'::json
-                )
-            ) AS geojson,
-            COALESCE(ROUND((SUM(r.comp_m) / 1000.0)::numeric, 2), 0.0) AS distancia_km,
-            COALESCE(ROUND((SUM((r.comp_m / 1000.0) / r.vel_kmh * 60.0))::numeric, 1), 0.0) AS tempo_min,
-            COALESCE(ROUND(AVG(r.dynamic_score)::numeric, 1), 0.0) AS risco_medio,
-            COALESCE(ROUND(MAX(r.dynamic_score)::numeric, 1), 0.0) AS risco_maximo,
-            COUNT(*) FILTER (WHERE r.dynamic_score >= 80.0)::int AS trechos_criticos,
-            COUNT(*) FILTER (WHERE r.dynamic_score >= 60.0 AND r.dynamic_score < 80.0)::int AS trechos_risco,
-            array_agg(r.id_trecho ORDER BY r.seq) AS ids_trechos
-        FROM rota r;
+            r.seq, 
+            r.node, 
+            r.edge, 
+            r.cost, 
+            t.id_trecho, 
+            t.name, 
+            t.length,
+            ST_AsGeoJSON(ST_Transform(t.geom, 4326)) AS geojson
+        FROM pgr_dijkstra(
+            'SELECT t.id_trecho AS id, t.source::bigint, t.target::bigint, ({cost_sql})::float AS cost, ({cost_sql})::float AS reverse_cost FROM trechos_osm t',
+            $1::bigint, $2::bigint, false
+        ) r
+        LEFT JOIN trechos_osm t ON t.id_trecho = r.edge
+        WHERE r.edge != -1
+        ORDER BY r.seq;
         """
 
-        row = await conn.fetchrow(query, v_orig, v_dest)
-        if not row or not row["geojson"] or not row["ids_trechos"]:
+        rows = await conn.fetch(pgr_query, int(orig_vert), int(dest_vert))
+        if not rows:
             return None
 
-        geojson = row["geojson"]
-        if isinstance(geojson, str):
-            geojson = json.loads(geojson)
+        total_length = 0.0
+        trecho_ids = []
+        features = []
 
+        for row in rows:
+            l = float(row["length"] or 0.0)
+            total_length += l
+            trecho_ids.append(int(row["id_trecho"]))
+            if row["geojson"]:
+                features.append({
+                    "type": "Feature",
+                    "geometry": json.loads(row["geojson"]),
+                    "properties": {
+                        "id_trecho": row["id_trecho"],
+                        "name": row["name"],
+                        "length": l
+                    }
+                })
+
+        dist_km = round(total_length / 1000.0, 2)
+        tempo_min = round((dist_km / 35.0) * 60.0, 1)
+
+        result = {
+            "distancia_km": dist_km,
+            "tempo_min": tempo_min,
+            "ids_trechos": trecho_ids,
+            "geojson": {
+                "type": "FeatureCollection",
+                "features": features
+            }
+        }
+
+        cls._set_cache(cache_key, result)
+        return result
+
+    @classmethod
+    def clear_cache(cls):
+        cls._cache.clear()
+
+    @classmethod
+    def cache_stats(cls) -> Dict[str, Any]:
         return {
-            "profile": profile,
-            "distancia_km": float(row["distancia_km"]),
-            "tempo_min": float(row["tempo_min"]),
-            "risco_medio": float(row["risco_medio"]),
-            "risco_maximo": float(row["risco_maximo"]),
-            "trechos_criticos": int(row["trechos_criticos"]),
-            "trechos_risco": int(row["trechos_risco"]),
-            "ids_trechos": list(row["ids_trechos"]),
-            "geojson": geojson
+            "total_entradas": len(cls._cache),
+            "max_capacidade": cls._max_cache_size,
+            "ttl_segundos": cls._cache_ttl_seconds
         }

@@ -1,10 +1,12 @@
-﻿from fastapi import FastAPI
+from app.services.security_headers import SecurityHeadersMiddleware
+from app.services.observabilidade import ObservabilidadeMiddleware
+from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from pathlib import Path
 from app.database import init_db_pool, close_db_pool
-from app.routers import estatisticas, trechos, ocorrencias, rotas, simulacao, relatorios, monitoramento, logistica
+from app.routers import estatisticas, trechos, ocorrencias, rotas, simulacao, relatorios, monitoramento, logistica, health
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -18,6 +20,8 @@ app = FastAPI(
     description="Inteligência Climática e Resiliência Operacional para Logística",
     lifespan=lifespan
 )
+app.add_middleware(ObservabilidadeMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -45,3 +49,5 @@ if static_dir.exists():
 @app.get("/health", tags=["Infraestrutura"])
 async def health_check():
     return {"status": "operacional", "modulo": "B2B Resilience Engine"}
+
+app.include_router(health.router)
