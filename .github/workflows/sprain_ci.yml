@@ -19,16 +19,22 @@ jobs:
           docker compose up -d --build
           sleep 10
 
-      - name: Wait for Postgres & Load Schema
+      - name: Wait for Postgres & Restore Database
         run: |
           docker exec sprain_db sh -c 'until pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"; do sleep 2; done'
           docker cp init_ci.sql sprain_db:/tmp/init_ci.sql
-          docker exec -i sprain_db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f /tmp/init_ci.sql || true'
+          docker exec -i sprain_db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f /tmp/init_ci.sql > /dev/null 2>&1 || true'
+          sleep 5
 
       - name: Run Full Test Suite Inside Container
         run: |
           docker exec sprain_api pip install pytest pytest-asyncio httpx
           docker exec -w /app/api sprain_api python -m pytest tests/ -v
+
+      - name: Show API Logs on Failure
+        if: failure()
+        run: |
+          docker logs sprain_api --tail 50
 
       - name: Shutdown Containers
         if: always()
