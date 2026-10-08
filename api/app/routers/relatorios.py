@@ -1,3 +1,4 @@
+from app.seguranca import require_role
 import csv
 import io
 from datetime import datetime
@@ -85,3 +86,62 @@ async def gerar_boletim_csv(conn: asyncpg.Connection = Depends(get_connection)):
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f"attachment; filename={nome_arquivo}"}
     )
+@router.get("/auditoria-intermunicipal", dependencies=[Depends(require_role(["ADMIN", "OPERATOR", "VIEWER"]))])
+async def exportar_auditoria_intermunicipal(
+    origem: str = "Araraquara",
+    destino: str = "Sao Paulo",
+    formato: str = "json",
+    conn: asyncpg.Connection = Depends(get_connection)
+):
+    query_dados = """
+        SELECT 
+            r.id_trecho,
+            r.name,
+            ROUND((r.length / 1000.0)::numeric, 1) AS distancia_km,
+            ROUND(((r.length / 1000.0) / 80.0 * 60.0)::numeric, 1) AS tempo_nominal_min,
+            COALESCE(c.status_pista, 'LIBERADA') AS status_pista,
+            COALESCE(c.precipitacao_mm_h, 0.0) AS precipitacao_mm_h,
+            COALESCE(c.fator_atraso, 1.0) AS fator_atraso,
+            ROUND((((r.length / 1000.0) / 80.0 * 60.0) * COALESCE(c.fator_atraso, 1.0))::numeric, 1) AS tempo_real_min
+        FROM corredor_sp_araraquara r
+        LEFT JOIN condicoes_corredor c ON c.id_trecho = r.id_trecho
+        ORDER BY r.id_trecho;
+    """
+    rows = await conn.fetch(query_dados)
+    
+    total_km = sum(float(r["distancia_km"]) for r in rows)
+    tempo_nominal = sum(float(r["tempo_nominal_min"]) for r in rows)
+    tempo_real = sum(float(r["tempo_real_min"]) for r in rows)
+    
+    trechos_bloqueados = [r for r in rows if r["status_pista"] == "RISCO_CRITICO_ALAGAMENTO"]
+    houve_alerta = len(trechos_bloqueados) > 0
+    
+    adicional_km = 18.4 if houve_alerta else 0.0
+    tempo_desvio = (tempo_nominal + 15.0) if houve_alerta else tempo_real
+    economia_tempo = (tempo_real - tempo_desvio) if houve_alerta else 0.0
+    
+    custo_diesel_extra = adicional_km * (6.10 / 2.5)
+    economia_hora_parada = economia_tempo * (150.0 / 60.0)
+    beneficio_liquido = economia_hora_parada - custo_diesel_extra
+    
+    dados_sumario = {
+        "rota": f"{origem} -> {destino}",
+        "distancia_nominal_km": round(total_km, 1),
+        "tempo_nominal_min": round(tempo_nominal, 1),
+        "tempo_estimado_sem_desvio_min": round(tempo_real, 1),
+        "tempo_com_desvio_min": round(tempo_desvio, 1),
+        "economia_tempo_min": round(economia_tempo, 1),
+        "custo_diesel_extra_brl": round(custo_diesel_extra, 2),
+        "economia_hora_parada_brl": round(economia_hora_parada, 2),
+        "beneficio_liquido_brl": round(beneficio_liquido, 2),
+        "status_operacional": "DESVIO_EXECUTADO" if houve_alerta else "ROTA_NORMAL"
+    }
+    
+    if formato.lower() == "csv":
+        output = io.StringIO()
+        writer = csv.DictWriter(output, fieldnames=dados_sumario.keys())
+        writer.writeheader()
+        writer.writerow(dados_sumario)
+        return Response(content=output.getvalue(), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=sumario_auditoria_intermunicipal.csv"})
+        
+    return dados_sumario

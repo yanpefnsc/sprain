@@ -1,0 +1,7 @@
+﻿"id","nome","distancia_km","tempo_nominal_min","tempo_real_min","status","precipitacao_mm_h"
+"1","Rod. Washington Luis (SP-310) - Araraquara a Sao Carlos","38,3","28,7","28,7","LIBERADA","0,0"
+"2","Rod. Washington Luis (SP-310) - Sao Carlos a Rio Claro","55,6","41,7","104,2","RISCO_CRITICO_ALAGAMENTO","78,5"
+"3","Rod. Washington Luis (SP-310) - Rio Claro a Limeira","23,5","17,6","17,6","LIBERADA","0,0"
+"4","Rod. Anhanguera / Bandeirantes (SP-330/348) - Limeira a Campinas","51,5","38,6","38,6","LIBERADA","0,0"
+"5","Rod. dos Bandeirantes (SP-348) - Campinas a Jundiai","35,8","26,9","26,9","LIBERADA","0,0"
+"6","Rod. dos Bandeirantes (SP-348) - Jundiai a Sao Paulo Marginal","40,3","30,2","30,2","LIBERADA","0,0"
