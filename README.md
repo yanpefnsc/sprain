@@ -48,3 +48,9 @@ Para viabilizar escala estadual sem degradação de memória em consultas `pgRou
 * **Camada Macro (Corredor Estruturante):** 245.0 km contínuos ligando Araraquara a São Paulo via SP-310 (Washington Luís), SP-330 (Anhanguera) e SP-348 (Bandeirantes).
 * **Camada Micro (Polígonos Urbanos Dinâmicos):** Extração sob demanda de eixos municipais (857 eixos estruturantes em Araraquara e malha metropolitana em São Paulo).
 * **Endpoint B2B:** `GET /api/v1/rotas/intermunicipal?origem=Araraquara&destino=Sao%20Paulo`
+
+### 🛰️ Telemetria Meteorológica em Tempo Real & Auditoria (v1.2.3)
+* **Ingestão Periódica:** Worker assíncrono nativo no ciclo de vida (`lifespan`) consultando telemetria em tempo real a cada 30 minutos via API Open-Meteo para os 6 nós do corredor SP-310 / SP-348.
+* **Modelo Financeiro de Desvio:** Cálculo automatizado de ROI logístico (Diesel Adicional vs. Custo Hora-Parada da Frota).
+* **Auditoria de Conformidade:** Endpoint tabular CSV com streaming direto para sistemas de BI e TMS corporativos:
+  - `GET /api/v1/relatorios/auditoria-intermunicipal?formato=csv`
