@@ -21,7 +21,8 @@ jobs:
 
       - name: Run Full Test Suite Inside Container
         run: |
-          docker exec sprain_api pytest tests/ -v
+          docker exec sprain_api pip install pytest pytest-asyncio httpx
+          docker exec -w /app/api sprain_api python -m pytest tests/ -v
 
       - name: Shutdown Containers
         if: always()
