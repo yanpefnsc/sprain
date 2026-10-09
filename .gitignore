@@ -17,3 +17,5 @@ diagnostico_projeto.txt
 cache/
 
 !scripts/migracao_pedagios.sql
+
+.env.*
