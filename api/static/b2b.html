@@ -65,6 +65,8 @@
                 <option value="85" selected>85 mm (Crítico)</option>
                 <option value="120">120 mm (Extremo)</option>
             </select>
+            <label style="display:block; font-size:11px; color:#9ca3af; margin:8px 0 2px;">Prejuizo estimado por alagamento (R$)</label>
+            <input id="input-prejuizo" type="number" min="0" step="100" value="0" style="width:100%; padding:6px; border-radius:4px; border:1px solid #374151; background:#1f2937; color:#f3f4f6; margin-bottom:8px;">
             <button onclick="executarSimulacao()">Simular Impacto</button>
         </div>
         <div id="table-container">
@@ -89,6 +91,7 @@
     </div>
 
     <script>
+        window.API_KEY = 'key_operator_demo';
         const map = new maplibregl.Map({
             container: 'map',
             style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
@@ -120,8 +123,13 @@
 
             const res = await fetch('/api/v1/logistica/simular-impacto', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ precipitacao_mm: mm })
+                headers: { 'Content-Type': 'application/json', 'X-API-Key': window.API_KEY },
+                body: JSON.stringify({
+                    precipitacao_mm: mm,
+                    parametros_custo: {
+                        prejuizo_potencial_alagamento: Number(document.getElementById('input-prejuizo').value) || 0
+                    }
+                })
             });
             const data = await res.json();
             recomendacoesAtuais = data.recomendacoes || [];
@@ -162,31 +170,7 @@
             const op = recomendacoesAtuais[idx];
             if (!op) return;
 
-            const res = await fetch('/api/v1/logistica/operacoes');
-            const listaOps = await res.json();
-            const dadosOp = listaOps.find(o => o.id_operacao === op.id_operacao);
-
-            if (dadosOp) {
-                const resRota = await fetch('/api/v1/rotas/calcular', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        origem_lat: dadosOp.origem_lat,
-                        origem_lon: dadosOp.origem_lon,
-                        destino_lat: dadosOp.destino_lat,
-                        destino_lon: dadosOp.destino_lon
-                    })
-                });
-                const rotaData = await resRota.json();
-                if (rotaData.rota_geojson) {
-                    map.getSource('rota-segura').setData(rotaData.rota_geojson);
-                    const coords = rotaData.rota_geojson.features.flatMap(f => f.geometry.coordinates);
-                    if (coords.length > 0) {
-                        const bounds = coords.reduce((b, coord) => b.extend(coord), new maplibregl.LngLatBounds(coords[0], coords[0]));
-                        map.fitBounds(bounds, { padding: 80 });
-                    }
-                }
-            }
+            await abrirExplicacaoDecisao(op.id_operacao);
         }
     </script>
 
@@ -220,7 +204,7 @@
 <script>
 async function abrirExplicacaoDecisao(idOperacao) {
   try {
-    const res = await fetch(`/api/v1/logistica/operacoes/${idOperacao}/explicacao`);
+    const res = await fetch(`/api/v1/logistica/operacoes/${idOperacao}/explicacao`, { headers: { 'X-API-Key': window.API_KEY } });
     if (!res.ok) return;
     const data = await res.json();
     document.getElementById('modal-op-title').innerText = `${data.id_operacao} | ${data.placa} (${data.modelo})`;
@@ -235,7 +219,7 @@ async function abrirExplicacaoDecisao(idOperacao) {
     }
     document.getElementById('modal-confianca').innerText = `Confiança: ${(data.confianca * 100).toFixed(0)}%`;
     document.getElementById('modal-justificativa').innerText = data.justificativa;
-    document.getElementById('modal-delta-km').innerText = data.metricas.delta_km > 0 ? `+${data.metricas.delta_km} km` : `${data.metricas.delta_km} km`;
+    document.getElementById('modal-delta-km').innerText = data.metricas.delta_km > 0 ? `+${data.metricas.delta_km.toFixed(2)} km` : `${data.metricas.delta_km.toFixed(2)} km`;
     document.getElementById('modal-delta-tempo').innerText = data.metricas.delta_tempo_min > 0 ? `+${data.metricas.delta_tempo_min} min` : `${data.metricas.delta_tempo_min} min`;
     document.getElementById('modal-custo').innerText = `R$ ${data.metricas.custo_desvio_brl.toFixed(2)}`;
     document.getElementById('modal-prejuizo').innerText = `R$ ${data.metricas.prejuizo_evitado_brl.toFixed(2)}`;
@@ -270,7 +254,7 @@ async function dispararWebhookOperacao(idOperacao) {
     try {
         const res = await fetch("/api/v1/logistica/alertas/disparar-webhook", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", "X-API-Key": window.API_KEY },
             body: JSON.stringify({
                 webhook_url: "https://httpbin.org/post",
                 id_operacao: idOperacao
