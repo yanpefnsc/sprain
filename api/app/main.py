@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.services.security_headers import SecurityHeadersMiddleware
 from app.services.observabilidade import ObservabilidadeMiddleware
 from app.database import init_db_pool, close_db_pool
+from app.services.webhook_dispatcher import WebhookDispatcher
 from app.routers import (
     estatisticas,
     trechos,
@@ -39,6 +40,7 @@ async def agendador_telemetria_corredor():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db_pool()
+    await WebhookDispatcher.garantir_schema()
     task_clima = asyncio.create_task(agendador_telemetria_corredor())
     try:
         yield

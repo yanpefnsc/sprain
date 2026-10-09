@@ -29,6 +29,7 @@ services:
       DB_NAME: enchentes
       API_KEYS: ${API_KEYS}
       TENANT_API_KEYS: ${TENANT_API_KEYS:-}
+      WEBHOOK_SECRET_KEY: ${WEBHOOK_SECRET_KEY:-}
     ports:
       - "8000:8000"
     depends_on:

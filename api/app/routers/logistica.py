@@ -778,14 +778,14 @@ class WebhookTestRequest(BaseModel):
 
 
 @router.post("/webhooks/configurar", dependencies=[Depends(require_role(["ADMIN"]))])
-async def configurar_webhook_tenant(payload: WebhookConfigRequest, tenant_id: str = Depends(resolve_tenant)):
+async def configurar_webhook_tenant(payload: WebhookConfigRequest, tenant_id: str = Depends(resolve_tenant), conn: asyncpg.Connection = Depends(get_connection)):
     if not is_safe_url(payload.url):
         raise HTTPException(status_code=400, detail="SSRF bloqueado")
-    return WebhookDispatcher.configurar_webhook(tenant_id, payload.url, payload.secret, payload.eventos)
+    return await WebhookDispatcher.configurar_webhook(conn, tenant_id, payload.url, payload.secret, payload.eventos)
 
 @router.post("/webhooks/testar", dependencies=[Depends(require_role(["ADMIN", "OPERATOR"]))])
-async def testar_webhook_tenant(payload: WebhookTestRequest, tenant_id: str = Depends(resolve_tenant)):
-    resultado = WebhookDispatcher.disparar_evento_sincrono(tenant_id, payload.evento, payload.dados)
+async def testar_webhook_tenant(payload: WebhookTestRequest, tenant_id: str = Depends(resolve_tenant), conn: asyncpg.Connection = Depends(get_connection)):
+    resultado = await WebhookDispatcher.disparar_evento_sincrono(conn, tenant_id, payload.evento, payload.dados)
     if not resultado["sucesso"]:
         raise HTTPException(status_code=400, detail=resultado["motivo"])
     return resultado

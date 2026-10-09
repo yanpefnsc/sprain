@@ -123,3 +123,11 @@ async def test_isolamento_entre_tenants_veiculos():
         lista_demo = await client.get("/veiculos", headers={"X-API-Key": "key_admin_demo"})
         ids_demo = [v["id_veiculo"] for v in lista_demo.json()]
         assert "VEIC-ISOLAMENTO-01" in ids_demo
+
+
+@pytest.mark.asyncio
+async def test_webhook_nao_vaza_entre_tenants():
+    async with httpx.AsyncClient(base_url=BASE_URL, timeout=TIMEOUT) as client:
+        resp = await client.post("/webhooks/testar", json={"evento": "ALERTA_ALAGAMENTO", "dados": {}}, headers={"X-API-Key": "key_admin_express"})
+        assert resp.status_code == 400
+        assert resp.json()["detail"] == "WEBHOOK_NAO_CONFIGURADO"

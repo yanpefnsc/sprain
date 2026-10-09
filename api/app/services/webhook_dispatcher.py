@@ -1,25 +1,49 @@
-import hmac
+import base64
 import hashlib
+import hmac
 import json
+import os
 import time
-from typing import Dict, Any, Optional
+from pathlib import Path
+from typing import Any, Dict
 
-WEBHOOKS_CONFIG: Dict[str, Dict[str, Any]] = {
-    "demo_corp": {
-        "url": "https://tms.democorp.com/webhooks/sprain",
-        "secret": "secret_demo_sprain_2026",
-        "eventos": ["ALERTA_ALAGAMENTO", "ROTA_RECALCULADA", "SLA_RISCO"]
-    }
-}
+from cryptography.fernet import Fernet, InvalidToken
+
+from app import database
+
+ARQUIVO_SCHEMA = Path(__file__).resolve().parents[3] / "db" / "ci" / "02_webhooks_tenant.sql"
+
+
+def _fernet() -> Fernet:
+    chave = os.getenv("WEBHOOK_SECRET_KEY", "").strip()
+    if chave:
+        return Fernet(chave.encode("utf-8"))
+    derivada = hashlib.sha256(b"sprain-dev-webhook-key").digest()
+    return Fernet(base64.urlsafe_b64encode(derivada))
+
 
 class WebhookDispatcher:
     @classmethod
-    def configurar_webhook(cls, tenant_id: str, url: str, secret: str, eventos: list) -> Dict[str, Any]:
-        WEBHOOKS_CONFIG[tenant_id] = {
-            "url": url,
-            "secret": secret,
-            "eventos": eventos
-        }
+    async def garantir_schema(cls) -> None:
+        sql = ARQUIVO_SCHEMA.read_text(encoding="utf-8")
+        async with database.db_pool.acquire() as conn:
+            await conn.execute(sql)
+
+    @classmethod
+    async def configurar_webhook(cls, conn, tenant_id: str, url: str, secret: str, eventos: list) -> Dict[str, Any]:
+        secret_cifrado = _fernet().encrypt(secret.encode("utf-8")).decode("utf-8")
+        await conn.execute(
+            """
+            INSERT INTO webhooks_tenant (tenant_id, url, secret_cifrado, eventos)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (tenant_id) DO UPDATE
+            SET url = EXCLUDED.url,
+                secret_cifrado = EXCLUDED.secret_cifrado,
+                eventos = EXCLUDED.eventos,
+                atualizado_em = now();
+            """,
+            tenant_id, url, secret_cifrado, eventos,
+        )
         return {"tenant_id": tenant_id, "status": "CONFIGURADO", "url": url, "eventos": eventos}
 
     @classmethod
@@ -27,10 +51,18 @@ class WebhookDispatcher:
         return hmac.new(secret.encode("utf-8"), payload_bytes, hashlib.sha256).hexdigest()
 
     @classmethod
-    def disparar_evento_sincrono(cls, tenant_id: str, evento: str, dados: dict) -> Dict[str, Any]:
-        config = WEBHOOKS_CONFIG.get(tenant_id)
-        if not config:
+    async def disparar_evento_sincrono(cls, conn, tenant_id: str, evento: str, dados: dict) -> Dict[str, Any]:
+        row = await conn.fetchrow(
+            "SELECT url, secret_cifrado FROM webhooks_tenant WHERE tenant_id = $1;",
+            tenant_id,
+        )
+        if row is None:
             return {"sucesso": False, "motivo": "WEBHOOK_NAO_CONFIGURADO"}
+
+        try:
+            secret = _fernet().decrypt(row["secret_cifrado"].encode("utf-8")).decode("utf-8")
+        except InvalidToken:
+            return {"sucesso": False, "motivo": "SEGREDO_ILEGIVEL"}
 
         payload = {
             "evento": evento,
@@ -39,7 +71,7 @@ class WebhookDispatcher:
             "payload": dados
         }
         payload_json = json.dumps(payload, sort_keys=True)
-        assinatura = cls.gerar_assinatura(config["secret"], payload_json.encode("utf-8"))
+        assinatura = cls.gerar_assinatura(secret, payload_json.encode("utf-8"))
 
         headers_envio = {
             "Content-Type": "application/json",
@@ -49,7 +81,7 @@ class WebhookDispatcher:
 
         return {
             "sucesso": True,
-            "url_destino": config["url"],
+            "url_destino": row["url"],
             "headers": headers_envio,
             "payload_enviado": payload,
             "assinatura_valida": True
