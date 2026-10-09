@@ -110,7 +110,7 @@ async def criar_operacao(dados: OperacaoCreate, conn: asyncpg.Connection = Depen
         conn, dados.origem_lon, dados.origem_lat, dados.destino_lon, dados.destino_lat, profile="FASTEST", rain_mm=0.0
     )
     if not rota_inicial:
-        raise HTTPException(status_code=400, detail="NÃ£o foi possÃ­vel traÃ§ar rota para as coordenadas fornecidas.")
+        raise HTTPException(status_code=400, detail="Não foi possível traçar rota para as coordenadas fornecidas.")
 
     dist_km = rota_inicial["distancia_km"]
     tempo_min = rota_inicial["tempo_min"]
@@ -156,7 +156,7 @@ async def simular_impacto(dados: SimulacaoB2BRequest, conn: asyncpg.Connection =
     id_cenario = f"SIM_{int(dados.precipitacao_mm)}MM_{uuid.uuid4().hex[:6]}"
     await conn.execute(
         "INSERT INTO cenarios_clima (id_cenario, nome, precipitacao_mm, tipo, tenant_id) VALUES ($1, $2, $3, 'SIMULACAO', $4);",
-        id_cenario, f"SimulaÃ§Ã£o {dados.precipitacao_mm} mm", dados.precipitacao_mm, dados.tenant_id
+        id_cenario, f"Simulação {dados.precipitacao_mm} mm", dados.precipitacao_mm, dados.tenant_id
     )
 
     fator_chuva = min(1.0, dados.precipitacao_mm / 100.0)
@@ -215,7 +215,7 @@ async def simular_impacto(dados: SimulacaoB2BRequest, conn: asyncpg.Connection =
                 custo_desvio = (km_add * custo_km) + ((min_add / 60.0) * custo_hora)
                 prejuizo_evitado = dados.parametros_custo.prejuizo_potencial_alagamento
 
-                motivo = f"Detectados {c_count} trechos bloqueados e {r_count} em risco de inundaÃ§Ã£o na rota planejada."
+                motivo = f"Detectados {c_count} trechos bloqueados e {r_count} em risco de inundação na rota planejada."
 
                 await conn.execute("""
                 INSERT INTO recomendacoes_operacao (
@@ -256,7 +256,7 @@ async def simular_impacto(dados: SimulacaoB2BRequest, conn: asyncpg.Connection =
 async def obter_explicacao_decisao(id_operacao: str, tenant_id: str = Depends(resolve_tenant), conn: asyncpg.Connection = Depends(get_connection)):
     op = await conn.fetchrow("SELECT * FROM operacoes WHERE id_operacao = $1 AND tenant_id = $2;", id_operacao, tenant_id)
     if not op:
-        raise HTTPException(status_code=404, detail="OperaÃ§Ã£o nÃ£o encontrada.")
+        raise HTTPException(status_code=404, detail="Operação não encontrada.")
 
     veiculo = await conn.fetchrow("SELECT placa, modelo, tipo_veiculo FROM veiculos WHERE id_veiculo = $1 AND tenant_id = $2;", op["id_veiculo"], tenant_id)
     rec = await conn.fetchrow("""
@@ -292,14 +292,14 @@ async def obter_explicacao_decisao(id_operacao: str, tenant_id: str = Depends(re
             "status": r["classe_risco"],
             "extensao_metros": round(float(r["length"] or 0), 1),
             "score_risco": float(r["ivi_score"] or 0),
-            "motivo": f"Vulnerabilidade histÃ³rica IVI {r['ivi_score']}"
+            "motivo": f"Vulnerabilidade histórica IVI {r['ivi_score']}"
         }
         for r in trechos_criticos
     ]
 
     justificativa = rec["motivo"] if rec and rec["motivo"] else (
-        f"A rota planejada intercepta {len(pontos_bloqueio)} trecho(s) classificados com severidade de alagamento. Recomendado desvio preventivo para resguardar o veÃ­culo e a carga."
-        if pontos_bloqueio else "OperaÃ§Ã£o em trechos normais sem restriÃ§Ãµes severas de alagamento."
+        f"A rota planejada intercepta {len(pontos_bloqueio)} trecho(s) classificados com severidade de alagamento. Recomendado desvio preventivo para resguardar o veículo e a carga."
+        if pontos_bloqueio else "Operação em trechos normais sem restrições severas de alagamento."
     )
 
     return {
@@ -349,7 +349,7 @@ async def exportar_plano_contingencia_csv(tenant_id: str = Depends(resolve_tenan
             ROUND((o.tempo_planejado_min + COALESCE(r.minutos_adicionais, 0.0))::numeric, 2) AS tempo_total_min,
             COALESCE(r.custo_desvio, 0.0) AS custo_desvio_brl,
             COALESCE(r.prejuizo_potencial_evitado, 0.0) AS prejuizo_evitado_brl,
-            COALESCE(r.motivo, 'OperaÃ§Ã£o sem impedimentos detectados.') AS justificativa
+            COALESCE(r.motivo, 'Operação sem impedimentos detectados.') AS justificativa
         FROM operacoes o
         LEFT JOIN veiculos v ON v.id_veiculo = o.id_veiculo AND v.tenant_id = o.tenant_id
         LEFT JOIN LATERAL (
@@ -416,7 +416,7 @@ async def importar_operacoes_lote(lote: List[Dict[str, Any]], tenant_id: str = D
             orig_nome = item.get("origem_nome", "Ponto de Coleta")
             orig_lat = float(item["origem_lat"])
             orig_lon = float(item["origem_lon"])
-            dest_nome = item.get("destino_nome", "DestinatÃ¡rio")
+            dest_nome = item.get("destino_nome", "Destinatário")
             dest_lat = float(item["destino_lat"])
             dest_lon = float(item["destino_lon"])
             dist_km = float(item.get("distancia_planejada_km", 5.0))
@@ -462,7 +462,7 @@ async def disparar_alerta_webhook(dados: WebhookAlertaRequest, conn: asyncpg.Con
         raise HTTPException(status_code=403, detail="Tenant mismatch")
     op = await conn.fetchrow("SELECT * FROM operacoes WHERE id_operacao = $1 AND tenant_id = $2;", dados.id_operacao, dados.tenant_id)
     if not op:
-        raise HTTPException(status_code=404, detail="OperaÃ§Ã£o nÃ£o encontrada.")
+        raise HTTPException(status_code=404, detail="Operação não encontrada.")
 
     veiculo = await conn.fetchrow("SELECT placa, modelo, tipo_veiculo FROM veiculos WHERE id_veiculo = $1 AND tenant_id = $2;", op["id_veiculo"], dados.tenant_id)
     rec = await conn.fetchrow("""
@@ -487,7 +487,7 @@ async def disparar_alerta_webhook(dados: WebhookAlertaRequest, conn: asyncpg.Con
             "recomendacao": {
                 "acao": rec["tipo_acao"] if rec else "ALTERAR_ROTA",
                 "nivel_risco": rec["nivel_risco"] if rec else "CRITICO",
-                "motivo": rec["motivo"] if rec else "Risco de inundaÃ§Ã£o severa no trajeto.",
+                "motivo": rec["motivo"] if rec else "Risco de inundação severa no trajeto.",
                 "confianca": float(rec["confianca"]) if rec and rec["confianca"] else 0.88
             },
             "impacto_financeiro": {
