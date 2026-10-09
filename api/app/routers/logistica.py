@@ -65,6 +65,14 @@ def is_safe_url(url: str) -> bool:
     return True
 
 
+class _SemRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+_opener_seguro = urllib.request.build_opener(_SemRedirect)
+
+
 async def aplicar_rate_limit(request: Request, claims: dict = Depends(get_current_user_claims)):
     limite, restantes = TenantRateLimiter.check_rate_limit(claims["tenant_id"])
     request.state.ratelimit_limit = limite
@@ -445,7 +453,11 @@ async def importar_operacoes_lote(lote: List[Dict[str, Any]], tenant_id: str = D
     return {"total_recebido": len(lote), "tenant_id": tenant_id, "sucessos": sucessos, "falhas": len(erros), "detalhe_falhas": erros}
 
 @router.post("/alertas/disparar-webhook", dependencies=[Depends(require_role(["ADMIN", "OPERATOR"]))])
-async def disparar_alerta_webhook(dados: WebhookAlertaRequest, conn: asyncpg.Connection = Depends(get_connection)):
+async def disparar_alerta_webhook(dados: WebhookAlertaRequest, conn: asyncpg.Connection = Depends(get_connection), tenant_autenticado: str = Depends(resolve_tenant)):
+    if not is_safe_url(dados.webhook_url):
+        raise HTTPException(status_code=400, detail="SSRF bloqueado")
+    if dados.tenant_id != tenant_autenticado:
+        raise HTTPException(status_code=403, detail="Tenant mismatch")
     op = await conn.fetchrow("SELECT * FROM operacoes WHERE id_operacao = $1 AND tenant_id = $2;", dados.id_operacao, dados.tenant_id)
     if not op:
         raise HTTPException(status_code=404, detail="OperaÃ§Ã£o nÃ£o encontrada.")
@@ -493,7 +505,7 @@ async def disparar_alerta_webhook(dados: WebhookAlertaRequest, conn: asyncpg.Con
             headers={"Content-Type": "application/json", "User-Agent": "SPRain-Resilience-Engine/1.0"},
             method="POST"
         )
-        with urllib.request.urlopen(req, timeout=4.0) as resp:
+        with _opener_seguro.open(req, timeout=4.0) as resp:
             status_code = resp.getcode()
             status_envio = "ENVIADO"
     except Exception as e:
@@ -760,13 +772,13 @@ class WebhookTestRequest(BaseModel):
 
 
 @router.post("/webhooks/configurar", dependencies=[Depends(require_role(["ADMIN"]))])
-async def configurar_webhook_tenant(payload: WebhookConfigRequest, tenant_id: str = "demo_corp"):
+async def configurar_webhook_tenant(payload: WebhookConfigRequest, tenant_id: str = Depends(resolve_tenant)):
     if not is_safe_url(payload.url):
         raise HTTPException(status_code=400, detail="SSRF bloqueado")
     return WebhookDispatcher.configurar_webhook(tenant_id, payload.url, payload.secret, payload.eventos)
 
 @router.post("/webhooks/testar", dependencies=[Depends(require_role(["ADMIN", "OPERATOR"]))])
-async def testar_webhook_tenant(payload: WebhookTestRequest, tenant_id: str = "demo_corp"):
+async def testar_webhook_tenant(payload: WebhookTestRequest, tenant_id: str = Depends(resolve_tenant)):
     resultado = WebhookDispatcher.disparar_evento_sincrono(tenant_id, payload.evento, payload.dados)
     if not resultado["sucesso"]:
         raise HTTPException(status_code=400, detail=resultado["motivo"])

@@ -55,3 +55,27 @@ async def test_webhook_bloqueia_ssrf(url):
         resp = await client.post("/webhooks/configurar?tenant_id=demo_corp", json=payload)
         assert resp.status_code == 400
         assert resp.json()["detail"] == "SSRF bloqueado"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("url", [
+    "http://127.0.0.1/x",
+    "http://localhost/x",
+    "http://169.254.169.254/latest/meta-data",
+    "http://10.0.0.5/x",
+    "file:///etc/passwd",
+])
+async def test_alerta_webhook_bloqueia_ssrf(url):
+    async with httpx.AsyncClient(base_url=BASE_URL, timeout=TIMEOUT, headers={"X-API-Key": "key_operator_demo"}) as client:
+        payload = {"webhook_url": url, "id_operacao": "qualquer", "tenant_id": "demo_corp"}
+        resp = await client.post("/alertas/disparar-webhook", json=payload)
+        assert resp.status_code == 400
+        assert resp.json()["detail"] == "SSRF bloqueado"
+
+
+@pytest.mark.asyncio
+async def test_alerta_webhook_bloqueia_outro_tenant():
+    async with httpx.AsyncClient(base_url=BASE_URL, timeout=TIMEOUT, headers={"X-API-Key": "key_operator_demo"}) as client:
+        payload = {"webhook_url": "https://example.com/x", "id_operacao": "qualquer", "tenant_id": "outro_tenant"}
+        resp = await client.post("/alertas/disparar-webhook", json=payload)
+        assert resp.status_code == 403
