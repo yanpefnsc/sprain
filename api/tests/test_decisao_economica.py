@@ -6,7 +6,7 @@ TIMEOUT = httpx.Timeout(45.0, connect=10.0)
 
 @pytest.mark.asyncio
 async def test_decisao_economica_tradeoff():
-    async with httpx.AsyncClient(base_url=BASE_URL, timeout=TIMEOUT) as client:
+    async with httpx.AsyncClient(base_url=BASE_URL, timeout=TIMEOUT, headers={"X-API-Key": "key_admin_demo"}) as client:
         payload = {
             "tenant_id": "demo_corp",
             "origem_lat": -23.542,
@@ -25,7 +25,7 @@ async def test_decisao_economica_tradeoff():
                 "janela_limite_min": 25.0
             }
         }
-        resp = await client.post("/decisao-economica", json=payload)
+        resp = await client.post("/decisao-economica", json=payload, headers={"X-API-Key": "key_admin_demo"})
         assert resp.status_code == 200
         data = resp.json()
         assert "decisao" in data

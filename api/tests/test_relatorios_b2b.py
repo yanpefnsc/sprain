@@ -6,7 +6,7 @@ TIMEOUT = httpx.Timeout(30.0, connect=10.0)
 
 @pytest.mark.asyncio
 async def test_exportacao_csv_auditoria():
-    async with httpx.AsyncClient(base_url=BASE_URL, timeout=TIMEOUT) as client:
+    async with httpx.AsyncClient(base_url=BASE_URL, timeout=TIMEOUT, headers={"X-API-Key": "key_admin_demo"}) as client:
         headers = {"X-API-Key": "key_admin_demo"}
         resp = await client.get("/relatorios/auditoria.csv?tenant_id=demo_corp", headers=headers)
         assert resp.status_code == 200
@@ -17,7 +17,7 @@ async def test_exportacao_csv_auditoria():
 
 @pytest.mark.asyncio
 async def test_relatorio_sumario_executivo_acesso_viewer():
-    async with httpx.AsyncClient(base_url=BASE_URL, timeout=TIMEOUT) as client:
+    async with httpx.AsyncClient(base_url=BASE_URL, timeout=TIMEOUT, headers={"X-API-Key": "key_admin_demo"}) as client:
         headers = {"X-API-Key": "key_viewer_demo"}
         resp = await client.get("/relatorios/sumario-executivo?tenant_id=demo_corp", headers=headers)
         assert resp.status_code == 200

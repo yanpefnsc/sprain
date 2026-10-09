@@ -7,7 +7,7 @@ HEADERS_ADMIN = {"X-API-Key": "key_admin_demo"}
 
 @pytest.mark.asyncio
 async def test_calculo_rota_intermunicipal_condicoes_favoraveis():
-    async with httpx.AsyncClient(base_url=BASE_URL, timeout=TIMEOUT) as client:
+    async with httpx.AsyncClient(base_url=BASE_URL, timeout=TIMEOUT, headers={"X-API-Key": "key_admin_demo"}) as client:
         resp = await client.get("/intermunicipal", headers=HEADERS_ADMIN)
         assert resp.status_code == 200
         data = resp.json()

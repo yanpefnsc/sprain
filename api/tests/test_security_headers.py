@@ -6,7 +6,7 @@ TIMEOUT = httpx.Timeout(15.0, connect=5.0)
 
 @pytest.mark.asyncio
 async def test_owasp_security_headers_presentes():
-    async with httpx.AsyncClient(base_url=BASE_URL, timeout=TIMEOUT) as client:
+    async with httpx.AsyncClient(base_url=BASE_URL, timeout=TIMEOUT, headers={"X-API-Key": "key_admin_demo"}) as client:
         resp = await client.get("/liveness")
         assert resp.status_code == 200
         headers = resp.headers

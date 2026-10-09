@@ -7,7 +7,7 @@ HEADERS_ADMIN = {"X-API-Key": "key_admin_demo"}
 
 @pytest.mark.asyncio
 async def test_cadastro_e_isolamento_multitenant():
-    async with httpx.AsyncClient(base_url=BASE_URL, timeout=TIMEOUT) as client:
+    async with httpx.AsyncClient(base_url=BASE_URL, timeout=TIMEOUT, headers={"X-API-Key": "key_admin_demo"}) as client:
         payload_tenant_a = {
             "id_veiculo": "TEST_V_TENANT_A",
             "placa": "TTA0001",
@@ -29,7 +29,7 @@ async def test_cadastro_e_isolamento_multitenant():
 
 @pytest.mark.asyncio
 async def test_simulacao_impacto_b2b():
-    async with httpx.AsyncClient(base_url=BASE_URL, timeout=TIMEOUT) as client:
+    async with httpx.AsyncClient(base_url=BASE_URL, timeout=TIMEOUT, headers={"X-API-Key": "key_admin_demo"}) as client:
         payload_sim = {
             "precipitacao_mm": 75.0,
             "tenant_id": "demo_corp"
@@ -44,7 +44,7 @@ async def test_simulacao_impacto_b2b():
 
 @pytest.mark.asyncio
 async def test_planejamento_d1():
-    async with httpx.AsyncClient(base_url=BASE_URL, timeout=TIMEOUT) as client:
+    async with httpx.AsyncClient(base_url=BASE_URL, timeout=TIMEOUT, headers={"X-API-Key": "key_admin_demo"}) as client:
         payload_d1 = {
             "data_alvo": "2026-10-10",
             "previsao_chuva_mm": 60.0,
@@ -60,7 +60,7 @@ async def test_planejamento_d1():
 
 @pytest.mark.asyncio
 async def test_auditoria_acuracia():
-    async with httpx.AsyncClient(base_url=BASE_URL, timeout=TIMEOUT) as client:
+    async with httpx.AsyncClient(base_url=BASE_URL, timeout=TIMEOUT, headers={"X-API-Key": "key_admin_demo"}) as client:
         resp = await client.get("/auditoria/acuracia", headers=HEADERS_ADMIN)
         assert resp.status_code == 200
         data = resp.json()
