@@ -6,9 +6,6 @@ import json
 import uuid
 import asyncpg
 import urllib.request
-import ipaddress
-import socket
-from urllib.parse import urlparse
 from typing import List, Dict, Any, Optional
 
 from app.services.rate_limiter import TenantRateLimiter
@@ -23,47 +20,9 @@ from app.schemas import (
     ParametrosFinanceiros
 )
 from app.services.routing_engine import RoutingEngine
+from app.url_segura import is_safe_url
 
 router = APIRouter(prefix="/api/v1/logistica", tags=["Logistica B2B"])
-
-def is_safe_url(url: str) -> bool:
-    try:
-        partes = urlparse(url)
-    except ValueError:
-        return False
-
-    if partes.scheme not in ("http", "https"):
-        return False
-
-    host = partes.hostname
-    if not host:
-        return False
-
-    try:
-        porta = partes.port or (443 if partes.scheme == "https" else 80)
-        infos = socket.getaddrinfo(host, porta, proto=socket.IPPROTO_TCP)
-    except (socket.gaierror, ValueError, UnicodeError):
-        return False
-
-    if not infos:
-        return False
-
-    for info in infos:
-        ip = ipaddress.ip_address(info[4][0])
-        if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
-            ip = ip.ipv4_mapped
-        if (
-            ip.is_private
-            or ip.is_loopback
-            or ip.is_link_local
-            or ip.is_multicast
-            or ip.is_reserved
-            or ip.is_unspecified
-        ):
-            return False
-
-    return True
-
 
 class _SemRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
@@ -775,6 +734,7 @@ class WebhookConfigRequest(BaseModel):
 class WebhookTestRequest(BaseModel):
     evento: str = "ALERTA_ALAGAMENTO"
     dados: dict
+    enviar: bool = False
 
 
 @router.post("/webhooks/configurar", dependencies=[Depends(require_role(["ADMIN"]))])
@@ -788,6 +748,8 @@ async def testar_webhook_tenant(payload: WebhookTestRequest, tenant_id: str = De
     resultado = await WebhookDispatcher.disparar_evento_sincrono(conn, tenant_id, payload.evento, payload.dados)
     if not resultado["sucesso"]:
         raise HTTPException(status_code=400, detail=resultado["motivo"])
+    if payload.enviar:
+        resultado["envio"] = await WebhookDispatcher.enviar_resultado(resultado)
     return resultado
 
 from app.schemas_economic import DecisaoEconomicaRequest

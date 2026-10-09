@@ -1,15 +1,19 @@
+import asyncio
 import base64
 import hashlib
 import hmac
 import json
 import os
 import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Any, Dict
 
 from cryptography.fernet import Fernet, InvalidToken
 
 from app import database
+from app.url_segura import is_safe_url, opener_sem_redirect
 
 ARQUIVO_SCHEMA = Path(__file__).resolve().parents[3] / "db" / "ci" / "02_webhooks_tenant.sql"
 
@@ -86,3 +90,24 @@ class WebhookDispatcher:
             "payload_enviado": payload,
             "assinatura_valida": True
         }
+
+    @classmethod
+    def _enviar_http(cls, url: str, headers: Dict[str, str], corpo: bytes, timeout: float = 5.0) -> Dict[str, Any]:
+        if not is_safe_url(url):
+            return {"enviado": False, "motivo": "URL_BLOQUEADA"}
+        envio_headers = dict(headers)
+        envio_headers["User-Agent"] = "SPRain-Webhook/1.0"
+        req = urllib.request.Request(url, data=corpo, headers=envio_headers, method="POST")
+        try:
+            with opener_sem_redirect.open(req, timeout=timeout) as resp:
+                codigo = resp.getcode()
+        except urllib.error.HTTPError as erro:
+            codigo = erro.code
+        except (urllib.error.URLError, OSError) as erro:
+            return {"enviado": False, "motivo": "FALHA_ENVIO", "tipo_erro": type(erro).__name__}
+        return {"enviado": True, "codigo_http": codigo, "entregue": 200 <= codigo < 300}
+
+    @classmethod
+    async def enviar_resultado(cls, resultado: Dict[str, Any]) -> Dict[str, Any]:
+        corpo = json.dumps(resultado["payload_enviado"], sort_keys=True).encode("utf-8")
+        return await asyncio.to_thread(cls._enviar_http, resultado["url_destino"], resultado["headers"], corpo)
