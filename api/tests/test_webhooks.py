@@ -79,3 +79,47 @@ async def test_alerta_webhook_bloqueia_outro_tenant():
         payload = {"webhook_url": "https://example.com/x", "id_operacao": "qualquer", "tenant_id": "outro_tenant"}
         resp = await client.post("/alertas/disparar-webhook", json=payload)
         assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("metodo,rota", [
+    ("GET", "/auditoria/acuracia"),
+    ("GET", "/performance/cache"),
+    ("POST", "/performance/cache/limpar"),
+])
+async def test_rotas_internas_exigem_api_key(metodo, rota):
+    async with httpx.AsyncClient(base_url=BASE_URL, timeout=TIMEOUT) as client:
+        resp = await client.request(metodo, rota)
+        assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_limpar_cache_so_admin():
+    async with httpx.AsyncClient(base_url=BASE_URL, timeout=TIMEOUT) as client:
+        negado = await client.post("/performance/cache/limpar", headers={"X-API-Key": "key_operator_demo"})
+        assert negado.status_code == 403
+        liberado = await client.post("/performance/cache/limpar", headers={"X-API-Key": "key_admin_demo"})
+        assert liberado.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_isolamento_entre_tenants_veiculos():
+    corpo = {
+        "tenant_id": "log_express",
+        "id_veiculo": "VEIC-ISOLAMENTO-01",
+        "placa": "ISO1A23",
+        "modelo": "Teste",
+    }
+    async with httpx.AsyncClient(base_url=BASE_URL, timeout=TIMEOUT) as client:
+        criado = await client.post("/veiculos", json=corpo, headers={"X-API-Key": "key_admin_demo"})
+        assert criado.status_code == 200
+        assert criado.json()["tenant_id"] == "demo_corp"
+
+        lista_express = await client.get("/veiculos", headers={"X-API-Key": "key_admin_express"})
+        assert lista_express.status_code == 200
+        ids = [v["id_veiculo"] for v in lista_express.json()]
+        assert "VEIC-ISOLAMENTO-01" not in ids
+
+        lista_demo = await client.get("/veiculos", headers={"X-API-Key": "key_admin_demo"})
+        ids_demo = [v["id_veiculo"] for v in lista_demo.json()]
+        assert "VEIC-ISOLAMENTO-01" in ids_demo

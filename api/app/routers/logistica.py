@@ -104,7 +104,8 @@ async def listar_veiculos(tenant_id: str = Depends(resolve_tenant), conn: asyncp
     return [dict(r) for r in rows]
 
 @router.post("/operacoes", dependencies=[Depends(require_role(["ADMIN", "OPERATOR"])), Depends(aplicar_rate_limit)])
-async def criar_operacao(dados: OperacaoCreate, conn: asyncpg.Connection = Depends(get_connection)):
+async def criar_operacao(dados: OperacaoCreate, conn: asyncpg.Connection = Depends(get_connection), tenant_id: str = Depends(resolve_tenant)):
+    dados.tenant_id = tenant_id
     rota_inicial = await RoutingEngine.compute_route(
         conn, dados.origem_lon, dados.origem_lat, dados.destino_lon, dados.destino_lat, profile="FASTEST", rain_mm=0.0
     )
@@ -150,7 +151,8 @@ async def listar_operacoes(tenant_id: str = Depends(resolve_tenant), conn: async
     return [dict(r) for r in rows]
 
 @router.post("/simular-impacto", dependencies=[Depends(require_role(["ADMIN", "OPERATOR"])), Depends(aplicar_rate_limit)])
-async def simular_impacto(dados: SimulacaoB2BRequest, conn: asyncpg.Connection = Depends(get_connection)):
+async def simular_impacto(dados: SimulacaoB2BRequest, conn: asyncpg.Connection = Depends(get_connection), tenant_id: str = Depends(resolve_tenant)):
+    dados.tenant_id = tenant_id
     id_cenario = f"SIM_{int(dados.precipitacao_mm)}MM_{uuid.uuid4().hex[:6]}"
     await conn.execute(
         "INSERT INTO cenarios_clima (id_cenario, nome, precipitacao_mm, tipo, tenant_id) VALUES ($1, $2, $3, 'SIMULACAO', $4);",
@@ -605,7 +607,7 @@ async def planejar_operacoes_d1(dados: PlanejamentoD1Request, conn: asyncpg.Conn
         "detalhamento_risco": operacoes_em_risco
     }
 
-@router.get("/auditoria/acuracia")
+@router.get("/auditoria/acuracia", dependencies=[Depends(require_role(["ADMIN", "OPERATOR", "VIEWER"]))])
 async def obter_auditoria_acuracia(conn: asyncpg.Connection = Depends(get_connection)):
     query = """
         SELECT 
@@ -654,11 +656,11 @@ async def obter_auditoria_acuracia(conn: asyncpg.Connection = Depends(get_connec
         "status_motor": "CALIBRADO_ALTA_CONFIANCA" if acuracia >= 85.0 else "EM_CALIBRACAO"
     }
 
-@router.get("/performance/cache")
+@router.get("/performance/cache", dependencies=[Depends(require_role(["ADMIN", "OPERATOR"]))])
 async def obter_status_cache():
     return RoutingEngine.cache_stats()
 
-@router.post("/performance/cache/limpar")
+@router.post("/performance/cache/limpar", dependencies=[Depends(require_role(["ADMIN"]))])
 async def limpar_cache():
     RoutingEngine.clear_cache()
     return {"sucesso": True, "mensagem": "Cache de rotas esvaziado"}
