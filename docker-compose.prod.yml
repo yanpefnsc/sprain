@@ -6,7 +6,7 @@ services:
     environment:
       POSTGRES_DB: ${DB_NAME:-enchentes}
       POSTGRES_USER: ${DB_USER:-enchentes}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-enchentes}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?defina DB_PASSWORD no .env.prod}
     volumes:
       - sprain_db_prod_data:/var/lib/postgresql/data
     networks:
@@ -35,10 +35,10 @@ services:
       DB_HOST: sprain_db
       DB_PORT: "5432"
       DB_USER: ${DB_USER:-enchentes}
-      DB_PASSWORD: ${DB_PASSWORD:-enchentes}
+      DB_PASSWORD: ${DB_PASSWORD:?defina DB_PASSWORD no .env.prod}
       DB_NAME: ${DB_NAME:-enchentes}
-      API_KEYS: ${API_KEYS:-key_admin_demo,key_operator_demo,key_viewer_demo}
-      TENANT_API_KEYS: ${TENANT_API_KEYS:-key_admin_demo:ADMIN:demo_corp;key_operator_demo:OPERATOR:demo_corp;key_viewer_demo:VIEWER:demo_corp;key_admin_express:ADMIN:log_express}
+      API_KEYS: ${API_KEYS:?defina API_KEYS no .env.prod}
+      TENANT_API_KEYS: ${TENANT_API_KEYS:?defina TENANT_API_KEYS no .env.prod}
     ports:
       - "8000:8000"
     depends_on:
