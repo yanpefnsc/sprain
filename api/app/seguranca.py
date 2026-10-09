@@ -1,4 +1,4 @@
-import os
+﻿import os
 import secrets
 from fastapi import Header, HTTPException, Depends
 from typing import Optional, List
@@ -22,8 +22,6 @@ def carregar_chaves_tenants() -> dict:
         "key_admin_express": {"role": "ADMIN", "tenant_id": "log_express"}
     }
 
-USERS_DB = carregar_chaves_tenants()
-
 ROLE_PERMISSIONS = {
     "ADMIN": ["read", "write", "simulate", "admin"],
     "OPERATOR": ["read", "write", "simulate"],
@@ -41,23 +39,25 @@ async def exigir_api_key(x_api_key: Optional[str] = Header(default=None)):
 async def get_current_user_claims(x_api_key: Optional[str] = Header(default=None)):
     if not x_api_key:
         raise HTTPException(status_code=401, detail="Nao autorizado. Forneca o cabecalho X-API-Key.")
-    if x_api_key not in USERS_DB:
+    users_db = carregar_chaves_tenants()
+    usuario_valido = None
+    for key, dados in users_db.items():
+        if secrets.compare_digest(x_api_key, key):
+            usuario_valido = dados
+            break
+    if not usuario_valido:
         raise HTTPException(status_code=401, detail="API-Key nao reconhecida ou sem permissao.")
-    user = USERS_DB[x_api_key]
-    user_scopes = ROLE_PERMISSIONS.get(user["role"], ["read"])
+    user_scopes = ROLE_PERMISSIONS.get(usuario_valido["role"], ["read"])
     return {
-        "role": user["role"],
-        "tenant_id": user["tenant_id"],
+        "role": usuario_valido["role"],
+        "tenant_id": usuario_valido["tenant_id"],
         "scopes": user_scopes
     }
 
 def require_role(allowed_roles: List[str]):
     async def role_checker(claims: dict = Depends(get_current_user_claims)):
         if claims["role"] not in allowed_roles:
-            raise HTTPException(
-                status_code=403,
-                detail=f"Permissao negada. Perfil '{claims['role']}' nao autorizado."
-            )
+            raise HTTPException(status_code=403, detail="Permissao negada.")
         return claims
     return role_checker
 

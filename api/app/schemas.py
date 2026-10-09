@@ -28,7 +28,7 @@ class ParametrosFinanceiros(BaseModel):
     custo_hora_motorista: float = 35.00
     custo_operacional_veiculo_hora: float = 50.00
     custo_atraso_hora: float = 120.00
-    prejuizo_potencial_alagamento: float = 3500.00
+    prejuizo_potencial_alagamento: float = 0.00
 
 class SimulacaoB2BRequest(BaseModel):
     tenant_id: str = "demo_corp"

@@ -1,5 +1,6 @@
 ﻿from abc import ABC, abstractmethod
 import urllib.request
+import json
 import re
 
 class WeatherProvider(ABC):
@@ -8,7 +9,7 @@ class WeatherProvider(ABC):
         pass
 
     @abstractmethod
-    def get_forecast_rainfall(self, station_id: str, hours: int = 24) -> float:
+    def get_forecast_rainfall(self, lat: float, lon: float, days: int = 1) -> float:
         pass
 
 class CGEWeatherProvider(WeatherProvider):
@@ -29,7 +30,7 @@ class CGEWeatherProvider(WeatherProvider):
         except Exception:
             return 0.0
 
-    def get_forecast_rainfall(self, station_id: str = "1000864", hours: int = 24) -> float:
+    def get_forecast_rainfall(self, lat: float, lon: float, days: int = 1) -> float:
         return 0.0
 
 class SimulatedWeatherProvider(WeatherProvider):
@@ -39,5 +40,21 @@ class SimulatedWeatherProvider(WeatherProvider):
     def get_current_rainfall(self, station_id: str) -> float:
         return self.fixed_mm
 
-    def get_forecast_rainfall(self, station_id: str, hours: int = 24) -> float:
+    def get_forecast_rainfall(self, lat: float, lon: float, days: int = 1) -> float:
         return self.fixed_mm
+
+class OpenMeteoProvider(WeatherProvider):
+    def get_current_rainfall(self, station_id: str) -> float:
+        return 0.0
+
+    def get_forecast_rainfall(self, lat: float, lon: float, days: int = 1) -> float:
+        try:
+            url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&daily=precipitation_sum&timezone=America%2FSao_Paulo&forecast_days={days+1}"
+            req = urllib.request.Request(url, headers={"User-Agent": "SPRain-B2B/3.0"})
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                if "daily" in data and "precipitation_sum" in data["daily"]:
+                    return float(data["daily"]["precipitation_sum"][days])
+            return 0.0
+        except Exception:
+            return 0.0
