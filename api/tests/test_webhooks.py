@@ -38,3 +38,20 @@ async def test_disparo_webhook_com_assinatura_hmac():
         assert data["sucesso"] is True
         assert "X-SPRain-Signature" in data["headers"]
         assert len(data["headers"]["X-SPRain-Signature"]) == 64
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("url", [
+    "http://127.0.0.1/x",
+    "http://localhost/x",
+    "http://169.254.169.254/latest/meta-data",
+    "http://10.0.0.5/x",
+    "http://[::1]/x",
+    "file:///etc/passwd",
+    "ftp://example.com/x",
+])
+async def test_webhook_bloqueia_ssrf(url):
+    async with httpx.AsyncClient(base_url=BASE_URL, timeout=TIMEOUT, headers={"X-API-Key": "key_admin_demo"}) as client:
+        payload = {"url": url, "secret": "x", "eventos": ["ALERTA_ALAGAMENTO"]}
+        resp = await client.post("/webhooks/configurar?tenant_id=demo_corp", json=payload)
+        assert resp.status_code == 400
+        assert resp.json()["detail"] == "SSRF bloqueado"
