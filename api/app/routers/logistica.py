@@ -620,6 +620,8 @@ async def obter_auditoria_acuracia(conn: asyncpg.Connection = Depends(get_connec
     """
     row = await conn.fetchrow(query)
     
+    if row is None:
+        raise HTTPException(status_code=500, detail="Falha ao consultar os dados.")
     total = int(row["total_avaliado"] or 0)
     vp = int(row["vp"] or 0)
     fp = int(row["fp"] or 0)
@@ -740,6 +742,8 @@ async def obter_sumario_executivo(tenant_id: str = Depends(resolve_tenant), conn
         WHERE o.tenant_id = $1;
     """
     row = await conn.fetchrow(query, tenant_id)
+    if row is None:
+        raise HTTPException(status_code=500, detail="Falha ao consultar os dados.")
     total_ops = int(row["total_operacoes"] or 0)
     rotas_risco = int(row["rotas_em_risco"] or 0)
     recalculadas = int(row["rotas_recalculadas"] or 0)
