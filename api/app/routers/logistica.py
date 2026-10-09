@@ -6,6 +6,9 @@ import json
 import uuid
 import asyncpg
 import urllib.request
+import ipaddress
+import socket
+from urllib.parse import urlparse
 from typing import List, Dict, Any, Optional
 
 from app.services.rate_limiter import TenantRateLimiter
@@ -22,6 +25,45 @@ from app.schemas import (
 from app.services.routing_engine import RoutingEngine
 
 router = APIRouter(prefix="/api/v1/logistica", tags=["Logistica B2B"])
+
+def is_safe_url(url: str) -> bool:
+    try:
+        partes = urlparse(url)
+    except ValueError:
+        return False
+
+    if partes.scheme not in ("http", "https"):
+        return False
+
+    host = partes.hostname
+    if not host:
+        return False
+
+    try:
+        porta = partes.port or (443 if partes.scheme == "https" else 80)
+        infos = socket.getaddrinfo(host, porta, proto=socket.IPPROTO_TCP)
+    except (socket.gaierror, ValueError, UnicodeError):
+        return False
+
+    if not infos:
+        return False
+
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0])
+        if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
+            ip = ip.ipv4_mapped
+        if (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_multicast
+            or ip.is_reserved
+            or ip.is_unspecified
+        ):
+            return False
+
+    return True
+
 
 async def aplicar_rate_limit(request: Request, claims: dict = Depends(get_current_user_claims)):
     limite, restantes = TenantRateLimiter.check_rate_limit(claims["tenant_id"])
@@ -716,8 +758,11 @@ class WebhookTestRequest(BaseModel):
     evento: str = "ALERTA_ALAGAMENTO"
     dados: dict
 
+
 @router.post("/webhooks/configurar", dependencies=[Depends(require_role(["ADMIN"]))])
 async def configurar_webhook_tenant(payload: WebhookConfigRequest, tenant_id: str = "demo_corp"):
+    if not is_safe_url(payload.url):
+        raise HTTPException(status_code=400, detail="SSRF bloqueado")
     return WebhookDispatcher.configurar_webhook(tenant_id, payload.url, payload.secret, payload.eventos)
 
 @router.post("/webhooks/testar", dependencies=[Depends(require_role(["ADMIN", "OPERATOR"]))])
