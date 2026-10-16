@@ -11,6 +11,11 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
+if __package__:
+    from .worker_status import write_status
+else:
+    from worker_status import write_status
+
 logger = logging.getLogger(__name__)
 
 IMPORTADOR = Path(__file__).with_name("sincronizar_dados_publicos.py")
@@ -37,9 +42,11 @@ def disparar_alerta(fonte: str, erro: str) -> None:
     except Exception as e:
         print(f"Falha ao enviar alerta para webhook: {e}", file=sys.stderr, flush=True)
 
-def executar_rodada() -> bool:
+def executar_rodada(heartbeat=None) -> bool:
     overall_success = True
     for fonte in FONTES:
+        if heartbeat:
+            heartbeat(fonte)
         cmd = [sys.executable, "-B", str(IMPORTADOR), fonte, "--aplicar"]
         try:
             result = subprocess.run(cmd, timeout=600, capture_output=True, text=True, check=False)
@@ -73,9 +80,17 @@ def main():
     horas = int(os.getenv("DADOS_PUBLICOS_INTERVALO_HORAS", "24"))
     if not 1 <= horas <= 168:
         parser.error("DADOS_PUBLICOS_INTERVALO_HORAS deve estar entre 1 e 168.")
+    last_result = None
     while True:
         print(f"{datetime.now(timezone.utc).isoformat()} Iniciando rodada de importacao...", flush=True)
-        sucesso = executar_rodada()
+        write_status("running", horas, last_result=last_result)
+        sucesso = executar_rodada(
+            heartbeat=lambda fonte: write_status(
+                "running", horas, last_result=last_result, source=fonte
+            )
+        )
+        last_result = "ok" if sucesso else "failed"
+        write_status("sleeping", horas, last_result=last_result)
         print(f"{datetime.now(timezone.utc).isoformat()} Rodada concluida.", flush=True)
         if args.once:
             raise SystemExit(0 if sucesso else 1)

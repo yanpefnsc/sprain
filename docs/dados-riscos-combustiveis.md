@@ -55,6 +55,16 @@ no Compose override; nao use credenciais de producao. O servico inicia com uma
 sincronizacao, repete a cada 24 horas e isola falhas por fonte. Tambem pode ser
 executado uma vez com `python scripts/worker_dados_publicos.py --once`.
 
+O container `dados-publicos` registra o andamento de cada fonte e tem um
+healthcheck. Confira com `docker compose --profile dados ps` e consulte os logs
+com `docker compose --profile dados logs dados-publicos`. O estado fica
+`unhealthy` se a rodada falhar, se uma fonte nao avancar em 15 minutos ou se
+uma nova rodada nao comecar ate 15 minutos depois do intervalo configurado.
+O healthcheck sinaliza o problema no Docker, mas nao envia notificacoes por si
+so; conecte um monitor externo aos estados do Docker para receber alertas de
+indisponibilidade do worker. `WEBHOOK_ALERTA_DADOS` continua a informar falhas
+individuais de importacao, quando configurado.
+
 O importador procura os anos recentes no catalogo da ARTESP, o CSV mensal mais
 recente de diesel e gasolina na ANP, o cadastro georreferenciado da ANP e os
 trimestres publicados pela SSP-SP.
