@@ -3,20 +3,19 @@ import time
 from typing import Any, Dict, Optional
 
 try:
-    from app.services.limiares_chuva import classificar as _classificar
+    from app.services.limiares_chuva import LIMIARES, LIMIARES_VENTO
 except ImportError:
-    from services.limiares_chuva import classificar as _classificar
+    from services.limiares_chuva import LIMIARES, LIMIARES_VENTO
 
 TETO_CHUVA_MM = 1000.0
 TETO_VENTO_KMH = 300.0
 
 CLASSIFICACAO = {
     "VERMELHO_EXTRAORDINARIO": ("CRITICO", "SUSPENDER_OPERACOES_OU_DESVIAR_TOTAL"),
-    "LARANJA_SEVERO":          ("ALTO",    "ROTEAMENTO_PREVENTIVO_OBRIGATORIO"),
-    "AMARELO_ATENCAO":         ("MODERADO","MONITORAMENTO_ATIVO_TELEMETRIA"),
-    "PISTA_MOLHADA":           ("BAIXO",   "REDUCAO_VELOCIDADE_RECOMENDADA"),
-    "VERDE_ESTAVEL":           ("BAIXO",   "FLUXO_NORMAL"),
-    "INDISPONIVEL":            ("DESCONHECIDO", "DADO_METEOROLOGICO_INDISPONIVEL"),
+    "LARANJA_SEVERO": ("ALTO", "ROTEAMENTO_PREVENTIVO_OBRIGATORIO"),
+    "AMARELO_ATENCAO": ("MODERADO", "MONITORAMENTO_ATIVO_TELEMETRIA"),
+    "VERDE_ESTAVEL": ("BAIXO", "FLUXO_NORMAL"),
+    "INDISPONIVEL": ("DESCONHECIDO", "DADO_METEOROLOGICO_INDISPONIVEL"),
 }
 
 
@@ -40,15 +39,18 @@ class SevereWeatherEngine:
         c = chuva or 0.0
         v = vento or 0.0
 
-        if v >= 75.0:
+        if c >= LIMIARES["critico"] or v >= LIMIARES_VENTO["critico"]:
             nivel = "VERMELHO_EXTRAORDINARIO"
-        elif v >= 55.0:
+        elif c >= LIMIARES["severo"] or v >= LIMIARES_VENTO["severo"]:
             nivel = "LARANJA_SEVERO"
+        elif c >= LIMIARES["atencao"]:
+            nivel = "AMARELO_ATENCAO"
         elif chuva is None:
             nivel = "INDISPONIVEL"
         else:
-            nivel_chuva, _ = _classificar(c)
-            nivel = nivel_chuva if nivel_chuva in CLASSIFICACAO else "VERDE_ESTAVEL"        risco, recomendacao = CLASSIFICACAO[nivel]
+            nivel = "VERDE_ESTAVEL"
+
+        risco, recomendacao = CLASSIFICACAO[nivel]
         return {
             "nivel_alerta": nivel,
             "classificacao_risco": risco,
