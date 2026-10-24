@@ -1,0 +1,10 @@
+[Unit]
+Description=Verificação externa do SPRain a cada minuto
+
+[Timer]
+OnCalendar=*-*-* *:*:00
+Persistent=true
+Unit=sprain-monitor.service
+
+[Install]
+WantedBy=timers.target

@@ -20,6 +20,9 @@ TLS/ingress, CORS autorizado, segredo de assinatura, banco provisionado,
 monitoramento e backup fora do host. A validação de configuração pode impedir
 o startup com credenciais de exemplo. Nunca contornar essa validação.
 
+Para checar disponibilidade pública de fora do servidor e avisar a equipe por
+Discord, consulte [monitoramento-externo.md](monitoramento-externo.md).
+
 ## Deploy
 
 Para anunciar uma janela planejada, defina `MANUTENCAO_INICIO`,
