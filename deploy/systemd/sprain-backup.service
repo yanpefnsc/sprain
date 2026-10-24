@@ -1,0 +1,13 @@
+[Unit]
+Description=SPRain PostgreSQL backup criptografado
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/sprain
+EnvironmentFile=/etc/sprain/backup.env
+StateDirectory=sprain-backup
+StateDirectoryMode=0700
+UMask=0077
+ExecStart=/usr/bin/python3 /opt/sprain/scripts/backup_offsite.py run --container ${SPRAIN_DB_CONTAINER} --database ${SPRAIN_DB_NAME} --user ${SPRAIN_DB_USER} --staging-dir /var/lib/sprain-backup/staging --remote ${SPRAIN_BACKUP_REMOTE} --config /etc/sprain/rclone.conf
