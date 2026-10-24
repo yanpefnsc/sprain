@@ -8,6 +8,7 @@ import pytest
 
 from app.database import get_connection
 from app.main import app
+from app.services import manifesto_service
 
 FUSO_SP = ZoneInfo("America/Sao_Paulo")
 AGORA_TESTE = datetime(2026, 10, 21, 10, 0, tzinfo=FUSO_SP)
@@ -110,8 +111,16 @@ class TransacaoCtx:
 
 
 @pytest.fixture
-def conexao_memoria():
+def conexao_memoria(monkeypatch):
     banco = BancoMemoriaManifesto()
+
+    processar_original = manifesto_service.processar_manifesto
+
+    async def processar_com_relogio_de_teste(*args, **kwargs):
+        kwargs.setdefault("referencia_agora", AGORA_TESTE)
+        return await processar_original(*args, **kwargs)
+
+    monkeypatch.setattr(manifesto_service, "processar_manifesto", processar_com_relogio_de_teste)
 
     async def _get_conn():
         yield banco
