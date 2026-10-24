@@ -1,0 +1,19 @@
+{
+	email {$ACME_EMAIL}
+}
+
+{$SPRAIN_DOMAIN} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+
+	reverse_proxy sprain_api:8000 {
+		health_uri /api/v1/health/readiness
+		health_interval 30s
+		health_timeout 5s
+	}
+}

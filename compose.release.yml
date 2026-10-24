@@ -1,0 +1,6 @@
+# Sobreposição opcional para trocar somente a imagem da API por identificador imutável.
+# Usar com --no-build e uma imagem previamente carregada no host.
+services:
+  sprain_api:
+    image: ${SPRAIN_API_IMAGE:?defina o digest da imagem da API}
+    pull_policy: never

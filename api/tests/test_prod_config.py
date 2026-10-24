@@ -46,3 +46,16 @@ def test_cors_producao_recusa_curinga(monkeypatch):
     monkeypatch.setenv("ENVIRONMENT", "production")
     with pytest.raises(RuntimeError, match="CORS_ORIGINS"):
         Settings(_env_file=None, CORS_ORIGINS="https://painel.exemplo.com,*").origens_cors
+
+
+def test_coleta_automatica_corredor_fica_desligada_em_producao(monkeypatch):
+    from app import main
+
+    monkeypatch.setattr(main, "demonstracao_habilitada", lambda: False)
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    assert not main.coleta_corredor_automatica_habilitada()
+
+    monkeypatch.setenv("ENVIRONMENT", "testing")
+    assert main.coleta_corredor_automatica_habilitada()
+    monkeypatch.setattr(main, "demonstracao_habilitada", lambda: True)
+    assert not main.coleta_corredor_automatica_habilitada()

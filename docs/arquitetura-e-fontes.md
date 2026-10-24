@@ -36,7 +36,7 @@ não são probabilidades calibradas de ocorrência.
 | Pedágios | Catálogo/importação, fonte e vigência da tarifa | Conferência por praça/categoria/eixos e sentido; cobertura parcial, tarifa desconhecida não é zero |
 | Pontes/restrições | Tags da malha OSM e registros de infraestrutura importados | Atualidade depende da importação e da completude das tags; ausência de limite não confirma passagem |
 | Malha | OpenStreetMap, PostGIS e pgRouting | Conectividade e snap dependem da malha importada; consulta de referência não cadastra corredor do cliente |
-| Clima | Script de sincronização/Open-Meteo; integração CGE limitada | Scheduler do backend tenta a cada 30 min fora da demo; tentativa não prova leitura atual. Fonte desativada não é substituída silenciosamente |
+| Clima | Script de sincronização/Open-Meteo; integração CGE limitada | Scheduler do backend tenta a cada 30 min somente fora da demo e de produção; tentativa não prova leitura atual. Em produção, a coleta gratuita fica desligada até haver fonte aprovada para uso comercial |
 | Trânsito/ocorrências | Endpoints/importações e relatos com natureza explícita | Conferir observação, validade e fonte. Relato de usuário não é confirmação |
 | Demonstração | Base CI e exercício sintético reservado | Nenhum dado de exercício deve ser interpretado como condição real; referência histórica pesquisada é identificada separadamente |
 
@@ -45,7 +45,7 @@ não são probabilidades calibradas de ocorrência.
 Isso só ocorre **se o worker estiver implantado e ativo**, não por abrir o mapa.
 O período de tentativa não muda a frequência de publicação do fornecedor.
 Falhas são auditadas a partir da instrumentação, sem reconstruir o passado.
-O scheduler climático não roda na demonstração isolada.
+O scheduler climático não roda na demonstração isolada nem em produção.
 
 ## Procedência, cobertura e licenças
 

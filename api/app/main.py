@@ -62,6 +62,11 @@ async def agendador_telemetria_corredor():
         except Exception:
             pass
 
+
+def coleta_corredor_automatica_habilitada() -> bool:
+    """A coleta gratuita do corredor não deve iniciar no piloto comercial."""
+    return settings.ambiente_atual != "production" and not demonstracao_habilitada()
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     carregar_janela()
@@ -83,7 +88,8 @@ async def lifespan(app: FastAPI):
     await garantir_acesso()
     await garantir_administracao()
     await garantir_planos_empresa()
-    task_clima = None if demonstracao_habilitada() else asyncio.create_task(agendador_telemetria_corredor())
+    task_clima = (asyncio.create_task(agendador_telemetria_corredor())
+                  if coleta_corredor_automatica_habilitada() else None)
     try:
         yield
     finally:

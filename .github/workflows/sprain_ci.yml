@@ -122,3 +122,88 @@ jobs:
         run: |
           docker compose -f compose.e2e.yml down
           docker compose down
+
+  production-compose-smoke:
+    runs-on: ubuntu-latest
+    env:
+      SPRAIN_BUILD_COMMIT: ${{ github.sha }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Create disposable production configuration
+        run: |
+          set -euo pipefail
+          umask 077
+          db_password="$(python3 -c 'import secrets; print(secrets.token_hex(24))')"
+          api_key="$(python3 -c 'import secrets; print(secrets.token_hex(24))')"
+          webhook_key="$(python3 -c 'import base64,secrets; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())')"
+          {
+            printf 'SPRAIN_BUILD_COMMIT=%s\n' "$SPRAIN_BUILD_COMMIT"
+            printf 'SPRAIN_DOMAIN=ci.invalid\nACME_EMAIL=ci@example.invalid\n'
+            printf 'DB_NAME=sprain_ci_prod\nDB_USER=sprain_ci_prod\nDB_PASSWORD=%s\n' "$db_password"
+            printf 'API_KEYS=%s\nTENANT_API_KEYS=%s:ADMIN:ci_company\n' "$api_key" "$api_key"
+            printf 'WEBHOOK_SECRET_KEY=%s\n' "$webhook_key"
+          } > .env.prod
+          docker compose --env-file .env.prod -p sprain-prod-smoke \
+            -f docker-compose.prod.yml -f compose.vps.yml config --quiet
+
+      - name: Start isolated PostGIS and load CI fixture
+        run: |
+          set -euo pipefail
+          docker compose --env-file .env.prod -p sprain-prod-smoke \
+            -f docker-compose.prod.yml -f compose.vps.yml up -d --wait sprain_db
+          empty="$(docker exec sprain_db_prod psql -v ON_ERROR_STOP=1 \
+            -U sprain_ci_prod -d sprain_ci_prod -tAc \
+            "SELECT to_regclass('public.trechos_osm') IS NULL")"
+          test "$empty" = t
+          for fixture in db/ci/*.sql; do
+            docker cp "$fixture" sprain_db_prod:/tmp/ci-fixture.sql
+            docker exec sprain_db_prod psql -v ON_ERROR_STOP=1 \
+              -U sprain_ci_prod -d sprain_ci_prod -f /tmp/ci-fixture.sql > /dev/null
+          done
+          docker exec sprain_db_prod psql -v ON_ERROR_STOP=1 \
+            -U sprain_ci_prod -d sprain_ci_prod -tAc \
+            'SELECT PostGIS_Version(), pgr_version(), count(*) FROM trechos_osm' \
+            | python3 -c 'import sys; fields=sys.stdin.read().strip().split("|"); assert len(fields)==3 and int(fields[2])>0'
+
+      - name: Start production API and verify readiness
+        run: |
+          set -euo pipefail
+          docker compose --env-file .env.prod -p sprain-prod-smoke \
+            -f docker-compose.prod.yml -f compose.vps.yml \
+            up -d --build --wait sprain_api
+          python3 - <<'PY'
+          import json
+          import os
+          import urllib.request
+
+          base = "http://127.0.0.1:8000"
+          with urllib.request.urlopen(base + "/api/v1/health/readiness", timeout=10) as response:
+              readiness = json.load(response)
+          assert readiness["status"] == "READY"
+          assert readiness["postgis"] == "OPERACIONAL"
+          assert readiness["total_trechos_osm"] > 0
+          with open(".env.prod", encoding="utf-8") as config:
+              key = next(line.split("=", 1)[1].strip() for line in config if line.startswith("API_KEYS="))
+          request = urllib.request.Request(base + "/api/v1/operacional/versao", headers={"X-API-Key": key})
+          with urllib.request.urlopen(request, timeout=10) as response:
+              version = json.load(response)
+          assert version["revisao"] == os.environ["SPRAIN_BUILD_COMMIT"]
+          print("Production Compose: API READY, PostGIS active, image revision verified.")
+          PY
+
+      - name: Show production container logs on failure
+        if: failure()
+        run: |
+          docker logs sprain_db_prod --tail 80 || true
+          docker logs sprain_api_prod --tail 80 || true
+
+      - name: Stop disposable production containers
+        if: always()
+        run: |
+          if [ -f .env.prod ]; then
+            docker compose --env-file .env.prod -p sprain-prod-smoke \
+              -f docker-compose.prod.yml -f compose.vps.yml down
+          fi
